@@ -32,6 +32,7 @@
     },
     "scripts": {
         "build": "npm run clean && npx tsx ./src/generate.ts && npx tsc",
+        "typecheck": "npx tsc --noEmit",
         "patch": "npm run build && git diff --quiet || (npm version patch && npm run build)",
         "prepublishOnly": "npm run build && git diff --quiet || (echo 'Error: Uncommitted changes detected.' && exit 1)",
         "clean": "rimraf ./dist"

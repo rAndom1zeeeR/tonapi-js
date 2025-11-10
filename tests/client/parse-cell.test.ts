@@ -13,11 +13,12 @@ test('Cell hex in response test', async () => {
 
     const addressString = '0:009d03ddede8c2620a72f999d03d5888102250a214bf574a29ff64df80162168';
     const addressObject = Address.parse(addressString);
-    const res = await ta.blockchain.getBlockchainRawAccount(addressObject);
+    const { data, error } = await ta.blockchain.getBlockchainRawAccount(addressObject);
 
-    expect(res).toBeDefined();
-    expect(res.code).toBeDefined();
-    expect(res.code).toBeInstanceOf(Cell);
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(data?.code).toBeDefined();
+    expect(data?.code).toBeInstanceOf(Cell);
 });
 
 test('Cell hex in request body test', async () => {
@@ -56,19 +57,20 @@ test('Cell base64 in response test', async () => {
 
     const addressString = 'EQDW6q4sRqQwNCmW4qwUpeFSU1Xhd6l3xwJ6jjknBPzxKNtT';
     const addressObject = Address.parse(addressString);
-    const res = await ta.blockchain.execGetMethodForBlockchainAccount(
+    const { data, error } = await ta.blockchain.execGetMethodForBlockchainAccount(
         addressObject,
         'royalty_params'
     );
 
-    const cellTupleItem = res.stack[2];
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(data?.success).toBeDefined();
 
-    expect(res).toBeDefined();
-    expect(res.success).toBeDefined();
+    const cellTupleItem = data?.stack[2];
     expect(cellTupleItem).toBeDefined();
-    expect(cellTupleItem.type).toBe('cell');
+    expect(cellTupleItem?.type).toBe('cell');
 
-    if (guardCell(cellTupleItem)) {
+    if (cellTupleItem && guardCell(cellTupleItem)) {
         expect(cellTupleItem.cell).toBeDefined();
         expect(cellTupleItem.cell).toBeInstanceOf(Cell);
     } else {

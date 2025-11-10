@@ -47,13 +47,15 @@ const contract = provider.open(wallet);
 
 console.log('Wallet address:', wallet.address.toString());
 
-const jettonWalletAddressResult = await ta.blockchain.execGetMethodForBlockchainAccount(
-    usdtMaster,
-    'get_wallet_address',
-    {
+const { data: jettonWalletAddressResult, error: getWalletError } =
+    await ta.blockchain.execGetMethodForBlockchainAccount(usdtMaster, 'get_wallet_address', {
         args: [wallet.address.toRawString()]
-    }
-);
+    });
+
+if (getWalletError) {
+    console.error('Error getting jetton wallet:', getWalletError.message);
+    process.exit(1);
+}
 
 const jettonWallet = Address.parse(jettonWalletAddressResult.decoded.jetton_wallet_address);
 
@@ -90,11 +92,16 @@ const messageToEstimate = beginCell()
 // we send a single message containing a transfer from our wallet to a desired destination.
 // as a result of estimation, TonAPI returns a list of messages that we need to sign.
 // the first message is a fee transfer to the relay address, the second message is our original transfer.
-const params = await ta.gasless.gaslessEstimate(usdtMaster, {
+const { data: params, error: estimateError } = await ta.gasless.gaslessEstimate(usdtMaster, {
     walletAddress: wallet.address,
     walletPublicKey: keyPair.publicKey.toString('hex'),
     messages: [{ boc: messageToEstimate }]
-}); //.catch(error => console.error(error));
+});
+
+if (estimateError) {
+    console.error('Error estimating gasless transfer:', estimateError.message);
+    process.exit(1);
+}
 
 console.log('Estimated transfer:', params);
 
@@ -129,16 +136,24 @@ const extMessage = beginCell()
     .endCell();
 
 // Send a gasless transfer
-ta.gasless
-    .gaslessSend({
-        walletPublicKey: keyPair.publicKey.toString('hex'),
-        boc: extMessage
-    })
-    .then(() => console.log('A gasless transfer sent!'))
-    .catch(error => console.error(error.message));
+const { data: sendResult, error: sendError } = await ta.gasless.gaslessSend({
+    walletPublicKey: keyPair.publicKey.toString('hex'),
+    boc: extMessage
+});
+
+if (sendError) {
+    console.error('Error sending gasless transfer:', sendError.message, sendError.status);
+} else {
+    console.log('A gasless transfer sent!');
+}
 
 async function printConfigAndReturnRelayAddress(): Promise<Address> {
-    const cfg = await ta.gasless.gaslessConfig();
+    const { data: cfg, error } = await ta.gasless.gaslessConfig();
+
+    if (error) {
+        console.error('Error getting gasless config:', error.message);
+        process.exit(1);
+    }
 
     console.log('Available jettons for gasless transfer');
     console.log(cfg.gasJettons.map(gasJetton => gasJetton.masterId));

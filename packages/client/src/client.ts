@@ -3539,6 +3539,8 @@ class HttpClient {
                 this.abortControllers.delete(cancelToken);
             }
 
+            // Return result object instead of throwing
+            // prepareResponse will handle error conversion
             if (!response.ok) throw result;
             return result.data;
         });
@@ -5782,6 +5784,28 @@ const components = {
 };
 type ComponentRef = keyof typeof components;
 
+export interface TonApiError {
+    /** Human-readable error message */
+    message: string;
+
+    /** Error type for programmatic handling */
+    type?: 'http_error' | 'network_error' | 'parsing_error';
+
+    /** Error code from API response (for http_error) */
+    code?: string;
+
+    /** HTTP status code (for http_error) */
+    status?: number;
+
+    /** Request URL for debugging */
+    url?: string;
+
+    /** Original error/response for advanced debugging */
+    cause?: unknown;
+}
+
+export type Result<T> = { data: T; error: null } | { data: null; error: TonApiError };
+
 function snakeToCamel(snakeCaseString: string): string {
     return snakeCaseString.replace(/(_\w)/g, match => match[1]?.toUpperCase() ?? '');
 }
@@ -5798,35 +5822,86 @@ function parseHexToBigInt(str: string) {
     return str.startsWith('-') ? BigInt(str.slice(1)) * -1n : BigInt(str);
 }
 
-async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promise<U> {
+async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promise<Result<U>> {
     return await promise
-        .then(obj => prepareResponseData<U>(obj, orSchema))
-        .catch(async response => {
-            let errorMessage: string = 'Unknown error occurred';
+        .then(obj => {
+            try {
+                // Parse and transform response data
+                const data = prepareResponseData<U>(obj, orSchema);
+                return { data, error: null } as Result<U>;
+            } catch (parseError: unknown) {
+                // SDK parsing error (Address.parse, Cell.fromHex, BigInt conversion, etc.)
+                const message =
+                    parseError instanceof Error
+                        ? `SDK parsing error: ${parseError.message}`
+                        : 'SDK parsing error: Unknown error';
 
-            if (response instanceof Error) {
-                errorMessage = response.message || 'Unknown fetch error';
-            } else if (
-                response &&
-                typeof response === 'object' &&
-                typeof response.error === 'string'
-            ) {
-                try {
-                    const errorJson = JSONParse(response.error);
-                    errorMessage =
-                        typeof errorJson === 'string'
-                            ? errorJson
-                            : errorJson?.error || `Wrong error response: ${response.error}`;
-                } catch (jsonParseError: unknown) {
-                    if (jsonParseError instanceof Error) {
-                        errorMessage = `Failed to parse error response: ${jsonParseError.message}`;
-                    } else {
-                        errorMessage = 'Failed to parse error response: Unknown parsing error';
+                return {
+                    data: null,
+                    error: {
+                        message,
+                        type: 'parsing_error',
+                        cause: parseError
                     }
-                }
+                } as Result<U>;
+            }
+        })
+        .catch(async response => {
+            // Network error (fetch failed)
+            if (response instanceof Error) {
+                return {
+                    data: null,
+                    error: {
+                        message: response.message || 'Network error',
+                        type: 'network_error',
+                        cause: response
+                    }
+                } as Result<U>;
             }
 
-            throw new Error(errorMessage, { cause: response });
+            // HTTP error with response
+            if (response && typeof response === 'object' && response.status !== undefined) {
+                const status = response.status;
+                const url = response.url;
+                let message: string = 'Request failed';
+                let code: string | undefined = undefined;
+
+                if (typeof response.error === 'string') {
+                    try {
+                        const errorJson = JSONParse(response.error);
+
+                        if (typeof errorJson === 'string') {
+                            message = errorJson;
+                        } else if (errorJson && typeof errorJson === 'object') {
+                            message = errorJson.error || errorJson.message || 'Request failed';
+                            code = errorJson.code || errorJson.error_code;
+                        }
+                    } catch (jsonParseError: unknown) {
+                        message = 'Failed to parse error response';
+                    }
+                }
+
+                return {
+                    data: null,
+                    error: {
+                        message,
+                        type: 'http_error',
+                        code,
+                        status,
+                        url,
+                        cause: response
+                    }
+                } as Result<U>;
+            }
+
+            // Unknown error
+            return {
+                data: null,
+                error: {
+                    message: 'Unknown error occurred',
+                    cause: response
+                }
+            } as Result<U>;
         });
 }
 

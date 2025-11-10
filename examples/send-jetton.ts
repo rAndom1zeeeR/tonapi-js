@@ -32,11 +32,16 @@ const wallet = WalletContractV5R1.create({ workchain: 0, publicKey: keyPair.publ
 const contract = adapter.open(wallet); // Open the wallet contract using the adapter
 
 // Get the sender's jetton wallet address from the jetton master contract
-const jettonWalletAddressResult = await ta.blockchain.execGetMethodForBlockchainAccount(
+const { data: jettonWalletAddressResult, error } = await ta.blockchain.execGetMethodForBlockchainAccount(
     jettonMaster,
     'get_wallet_address',
     { args: [wallet.address.toRawString()] }
 );
+
+if (error) {
+    console.error('Error getting jetton wallet address:', error.message);
+    process.exit(1);
+}
 
 const jettonWallet = Address.parse(jettonWalletAddressResult.decoded.jetton_wallet_address); // Extract the jetton wallet address
 

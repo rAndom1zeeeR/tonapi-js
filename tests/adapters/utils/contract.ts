@@ -37,10 +37,13 @@ export class WalletItem implements Contract {
     }
 
     static async createFromAddress(address: Address) {
-        const accountData = await ta.blockchain.execGetMethodForBlockchainAccount(
+        const { data: accountData, error } = await ta.blockchain.execGetMethodForBlockchainAccount(
             address,
             'get_public_key'
         );
+        if (error) {
+            throw new Error(`Failed to get public key: ${error.message}`);
+        }
         const workchain = address.workChain;
         const publicKey = BigInt(accountData.decoded.public_key);
         const bufferPublicKey = Buffer.from(publicKey.toString(16), 'hex');
