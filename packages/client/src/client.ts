@@ -3478,6 +3478,29 @@ class HttpClient {
         }
     };
 
+    public setApiKey = (apiKey: string | undefined) => {
+        if (apiKey) {
+            this.baseApiParams = {
+                ...this.baseApiParams,
+                headers: {
+                    ...(this.baseApiParams.headers || {}),
+                    Authorization: `Bearer ${apiKey}`
+                } as HeadersInit
+            };
+        } else {
+            const headers = { ...(this.baseApiParams.headers || {}) } as Record<string, string>;
+            delete headers['Authorization'];
+            this.baseApiParams = {
+                ...this.baseApiParams,
+                headers: headers as HeadersInit
+            };
+        }
+    };
+
+    public setCustomFetch = (fetchFn: typeof fetch | undefined) => {
+        this.providedFetch = fetchFn ?? null;
+    };
+
     public request = async <T = any, E = any>({
         body,
         secure,
@@ -6063,3217 +6086,3141 @@ function prepareRequestData(data: any, orSchema?: any): any {
  *
  * Provide access to indexed TON blockchain
  */
-export class TonApiClient {
-    http: HttpClient;
 
-    constructor(apiConfig: ApiConfig = {}) {
-        this.http = new HttpClient(apiConfig);
+// Singleton HttpClient instance
+let httpClient: HttpClient | null = null;
+
+/**
+ * Initialize the API client with configuration
+ * @param apiConfig - Configuration for the API client (baseUrl, apiKey, etc.)
+ */
+export function initClient(apiConfig: ApiConfig = {}): void {
+    httpClient = new HttpClient(apiConfig);
+}
+
+/**
+ * Get the current HttpClient instance (creates one if it doesn't exist)
+ * @internal
+ */
+function getHttpClient(): HttpClient {
+    if (!httpClient) {
+        httpClient = new HttpClient();
     }
+    return httpClient;
+}
 
-    utilities = {
-        /**
-         * @description Get the openapi.json file
-         *
-         * @tags Utilities
-         * @name GetOpenapiJson
-         * @request GET:/v2/openapi.json
-         */
-        getOpenapiJson: (params: RequestParams = {}) => {
-            const req = this.http.request<GetOpenapiJsonData, Error>({
-                path: `/v2/openapi.json`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+/**
+ * Update the API client configuration
+ * @param apiConfig - Configuration to update
+ */
+export function updateClient(apiConfig: Partial<ApiConfig>): void {
+    const client = getHttpClient();
+    if (apiConfig.baseUrl !== undefined) client.baseUrl = apiConfig.baseUrl;
+    if (apiConfig.apiKey !== undefined) client.setApiKey(apiConfig.apiKey);
+    if (apiConfig.fetch !== undefined) client.setCustomFetch(apiConfig.fetch);
+}
 
-            return prepareResponse<GetOpenapiJsonData>(req, {});
-        },
+/**
+ * @description Get the openapi.json file
+ *
+ * @tags Utilities
+ * @name GetOpenapiJson
+ * @request GET:/v2/openapi.json
+ */
+export const getOpenapiJson = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetOpenapiJsonData, Error>({
+        path: `/v2/openapi.json`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
 
-        /**
-         * @description Get the openapi.yml file
-         *
-         * @tags Utilities
-         * @name GetOpenapiYml
-         * @request GET:/v2/openapi.yml
-         */
-        getOpenapiYml: (params: RequestParams = {}) => {
-            const req = this.http.request<GetOpenapiYmlData, Error>({
-                path: `/v2/openapi.yml`,
-                method: 'GET',
-                ...params
-            });
+    return prepareResponse<GetOpenapiJsonData>(req, {});
+};
 
-            return prepareResponse<GetOpenapiYmlData>(req);
-        },
+/**
+ * @description Get the openapi.yml file
+ *
+ * @tags Utilities
+ * @name GetOpenapiYml
+ * @request GET:/v2/openapi.yml
+ */
+export const getOpenapiYml = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetOpenapiYmlData, Error>({
+        path: `/v2/openapi.yml`,
+        method: 'GET',
+        ...params
+    });
 
-        /**
-         * @description Status
-         *
-         * @tags Utilities
-         * @name Status
-         * @request GET:/v2/status
-         */
-        status: (params: RequestParams = {}) => {
-            const req = this.http.request<StatusData, Error>({
-                path: `/v2/status`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+    return prepareResponse<GetOpenapiYmlData>(req);
+};
 
-            return prepareResponse<StatusData>(req, { $ref: '#/components/schemas/ServiceStatus' });
-        },
+/**
+ * @description Status
+ *
+ * @tags Utilities
+ * @name Status
+ * @request GET:/v2/status
+ */
+export const status = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<StatusData, Error>({
+        path: `/v2/status`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
 
-        /**
-         * @description parse address and display in all formats
-         *
-         * @tags Utilities
-         * @name AddressParse
-         * @request GET:/v2/address/{account_id}/parse
-         */
-        addressParse: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<AddressParseData, Error>({
-                path: `/v2/address/${accountId}/parse`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+    return prepareResponse<StatusData>(req, { $ref: '#/components/schemas/ServiceStatus' });
+};
 
-            return prepareResponse<AddressParseData>(req, {
+/**
+ * @description parse address and display in all formats
+ *
+ * @tags Utilities
+ * @name AddressParse
+ * @request GET:/v2/address/{account_id}/parse
+ */
+export const addressParse = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<AddressParseData, Error>({
+        path: `/v2/address/${accountId}/parse`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<AddressParseData>(req, {
+        type: 'object',
+        required: ['raw_form', 'bounceable', 'non_bounceable', 'given_type', 'test_only'],
+        properties: {
+            raw_form: { type: 'string', format: 'address' },
+            bounceable: {
+                required: ['b64', 'b64url'],
                 type: 'object',
-                required: ['raw_form', 'bounceable', 'non_bounceable', 'given_type', 'test_only'],
-                properties: {
-                    raw_form: { type: 'string', format: 'address' },
-                    bounceable: {
-                        required: ['b64', 'b64url'],
-                        type: 'object',
-                        properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
-                    },
-                    non_bounceable: {
-                        required: ['b64', 'b64url'],
-                        type: 'object',
-                        properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
-                    },
-                    given_type: { type: 'string' },
-                    test_only: { type: 'boolean' }
-                }
-            });
-        }
-    };
-    blockchain = {
-        /**
-         * @description Get reduced blockchain blocks data
-         *
-         * @tags Blockchain
-         * @name GetReducedBlockchainBlocks
-         * @request GET:/v2/blockchain/reduced/blocks
-         */
-        getReducedBlockchainBlocks: (
-            query: {
-                /** @format int64 */
-                from: number;
-                /** @format int64 */
-                to: number;
+                properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
             },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetReducedBlockchainBlocksData, Error>({
-                path: `/v2/blockchain/reduced/blocks`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetReducedBlockchainBlocksData>(req, {
-                $ref: '#/components/schemas/ReducedBlocks'
-            });
-        },
-
-        /**
-         * @description Get blockchain block data
-         *
-         * @tags Blockchain
-         * @name GetBlockchainBlock
-         * @request GET:/v2/blockchain/blocks/{block_id}
-         */
-        getBlockchainBlock: (blockId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainBlockData, Error>({
-                path: `/v2/blockchain/blocks/${blockId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainBlockData>(req, {
-                $ref: '#/components/schemas/BlockchainBlock'
-            });
-        },
-
-        /**
-         * @description Get blockchain block shards
-         *
-         * @tags Blockchain
-         * @name GetBlockchainMasterchainShards
-         * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/shards
-         */
-        getBlockchainMasterchainShards: (masterchainSeqno: number, params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainMasterchainShardsData, Error>({
-                path: `/v2/blockchain/masterchain/${masterchainSeqno}/shards`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainMasterchainShardsData>(req, {
-                $ref: '#/components/schemas/BlockchainBlockShards'
-            });
-        },
-
-        /**
-         * @description Get all blocks in all shards and workchains between target and previous masterchain block according to shards last blocks snapshot in masterchain.  We don't recommend to build your app around this method because it has problem with scalability and will work very slow in the future.
-         *
-         * @tags Blockchain
-         * @name GetBlockchainMasterchainBlocks
-         * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/blocks
-         */
-        getBlockchainMasterchainBlocks: (masterchainSeqno: number, params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainMasterchainBlocksData, Error>({
-                path: `/v2/blockchain/masterchain/${masterchainSeqno}/blocks`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainMasterchainBlocksData>(req, {
-                $ref: '#/components/schemas/BlockchainBlocks'
-            });
-        },
-
-        /**
-         * @description Get all transactions in all shards and workchains between target and previous masterchain block according to shards last blocks snapshot in masterchain. We don't recommend to build your app around this method because it has problem with scalability and will work very slow in the future.
-         *
-         * @tags Blockchain
-         * @name GetBlockchainMasterchainTransactions
-         * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/transactions
-         */
-        getBlockchainMasterchainTransactions: (
-            masterchainSeqno: number,
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetBlockchainMasterchainTransactionsData, Error>({
-                path: `/v2/blockchain/masterchain/${masterchainSeqno}/transactions`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainMasterchainTransactionsData>(req, {
-                $ref: '#/components/schemas/Transactions'
-            });
-        },
-
-        /**
-         * @description Get blockchain config from a specific block, if present.
-         *
-         * @tags Blockchain
-         * @name GetBlockchainConfigFromBlock
-         * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config
-         */
-        getBlockchainConfigFromBlock: (masterchainSeqno: number, params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainConfigFromBlockData, Error>({
-                path: `/v2/blockchain/masterchain/${masterchainSeqno}/config`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainConfigFromBlockData>(req, {
-                $ref: '#/components/schemas/BlockchainConfig'
-            });
-        },
-
-        /**
-         * @description Get raw blockchain config from a specific block, if present.
-         *
-         * @tags Blockchain
-         * @name GetRawBlockchainConfigFromBlock
-         * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config/raw
-         */
-        getRawBlockchainConfigFromBlock: (masterchainSeqno: number, params: RequestParams = {}) => {
-            const req = this.http.request<GetRawBlockchainConfigFromBlockData, Error>({
-                path: `/v2/blockchain/masterchain/${masterchainSeqno}/config/raw`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawBlockchainConfigFromBlockData>(req, {
-                $ref: '#/components/schemas/RawBlockchainConfig'
-            });
-        },
-
-        /**
-         * @description Get transactions from block
-         *
-         * @tags Blockchain
-         * @name GetBlockchainBlockTransactions
-         * @request GET:/v2/blockchain/blocks/{block_id}/transactions
-         */
-        getBlockchainBlockTransactions: (blockId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainBlockTransactionsData, Error>({
-                path: `/v2/blockchain/blocks/${blockId}/transactions`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainBlockTransactionsData>(req, {
-                $ref: '#/components/schemas/Transactions'
-            });
-        },
-
-        /**
-         * @description Get transaction data
-         *
-         * @tags Blockchain
-         * @name GetBlockchainTransaction
-         * @request GET:/v2/blockchain/transactions/{transaction_id}
-         */
-        getBlockchainTransaction: (transactionId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainTransactionData, Error>({
-                path: `/v2/blockchain/transactions/${transactionId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainTransactionData>(req, {
-                $ref: '#/components/schemas/Transaction'
-            });
-        },
-
-        /**
-         * @description Get transaction data by message hash
-         *
-         * @tags Blockchain
-         * @name GetBlockchainTransactionByMessageHash
-         * @request GET:/v2/blockchain/messages/{msg_id}/transaction
-         */
-        getBlockchainTransactionByMessageHash: (msgId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainTransactionByMessageHashData, Error>({
-                path: `/v2/blockchain/messages/${msgId}/transaction`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainTransactionByMessageHashData>(req, {
-                $ref: '#/components/schemas/Transaction'
-            });
-        },
-
-        /**
-         * @description Get blockchain validators
-         *
-         * @tags Blockchain
-         * @name GetBlockchainValidators
-         * @request GET:/v2/blockchain/validators
-         */
-        getBlockchainValidators: (params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainValidatorsData, Error>({
-                path: `/v2/blockchain/validators`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainValidatorsData>(req, {
-                $ref: '#/components/schemas/Validators'
-            });
-        },
-
-        /**
-         * @description Get last known masterchain block
-         *
-         * @tags Blockchain
-         * @name GetBlockchainMasterchainHead
-         * @request GET:/v2/blockchain/masterchain-head
-         */
-        getBlockchainMasterchainHead: (params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainMasterchainHeadData, Error>({
-                path: `/v2/blockchain/masterchain-head`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainMasterchainHeadData>(req, {
-                $ref: '#/components/schemas/BlockchainBlock'
-            });
-        },
-
-        /**
-         * @description Get low-level information about an account taken directly from the blockchain.
-         *
-         * @tags Blockchain
-         * @name GetBlockchainRawAccount
-         * @request GET:/v2/blockchain/accounts/{account_id}
-         */
-        getBlockchainRawAccount: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetBlockchainRawAccountData, Error>({
-                path: `/v2/blockchain/accounts/${accountId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainRawAccountData>(req, {
-                $ref: '#/components/schemas/BlockchainRawAccount'
-            });
-        },
-
-        /**
-         * @description Get account transactions
-         *
-         * @tags Blockchain
-         * @name GetBlockchainAccountTransactions
-         * @request GET:/v2/blockchain/accounts/{account_id}/transactions
-         */
-        getBlockchainAccountTransactions: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * omit this parameter to get last transactions
-                 * @format bigint
-                 * @example 39787624000003
-                 */
-                after_lt?: bigint;
-                /**
-                 * omit this parameter to get last transactions
-                 * @format bigint
-                 * @example 39787624000003
-                 */
-                before_lt?: bigint;
-                /**
-                 * @format int32
-                 * @min 1
-                 * @max 1000
-                 * @default 100
-                 * @example 100
-                 */
-                limit?: number;
-                /**
-                 * used to sort the result-set in ascending or descending order by lt.
-                 * @default "desc"
-                 */
-                sort_order?: 'desc' | 'asc';
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetBlockchainAccountTransactionsData, Error>({
-                path: `/v2/blockchain/accounts/${accountId}/transactions`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainAccountTransactionsData>(req, {
-                $ref: '#/components/schemas/Transactions'
-            });
-        },
-
-        /**
-         * @description Execute get method for account
-         *
-         * @tags Blockchain
-         * @name ExecGetMethodForBlockchainAccount
-         * @request GET:/v2/blockchain/accounts/{account_id}/methods/{method_name}
-         */
-        execGetMethodForBlockchainAccount: (
-            accountId_Address: Address,
-            methodName: string,
-            query?: {
-                /**
-                 * Supported values:
-                 * "NaN" for NaN type,
-                 * "Null" for Null type,
-                 * 10-base digits for tiny int type (Example: 100500),
-                 * 0x-prefixed hex digits for int257 (Example: 0xfa01d78381ae32),
-                 * all forms of addresses for slice type (Example: 0:6e731f2e28b73539a7f85ac47ca104d5840b229351189977bb6151d36b5e3f5e),
-                 * single-root base64-encoded BOC for cell (Example: "te6ccgEBAQEAAgAAAA=="),
-                 * single-root hex-encoded BOC for slice (Example: b5ee9c72010101010002000000)
-                 * @example ["0:9a33970f617bcd71acf2cd28357c067aa31859c02820d8f01d74c88063a8f4d8"]
-                 */
-                args?: string[];
-                /**
-                 * A temporary fix to switch to a scheme with direct ordering of arguments.
-                 * If equal to false, then the method takes arguments in direct order,
-                 * e.g. for get_nft_content(int index, cell individual_content) we pass a list of arguments [index, individual_content].
-                 * If equal to true, then the method takes arguments in reverse order, e.g. [individual_content, index].
-                 * @default true
-                 */
-                fix_order?: boolean;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<ExecGetMethodForBlockchainAccountData, Error>({
-                path: `/v2/blockchain/accounts/${accountId}/methods/${methodName}`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<ExecGetMethodForBlockchainAccountData>(req, {
-                $ref: '#/components/schemas/MethodExecutionResult'
-            });
-        },
-
-        /**
-         * @description Send message to blockchain
-         *
-         * @tags Blockchain
-         * @name SendBlockchainMessage
-         * @request POST:/v2/blockchain/message
-         */
-        sendBlockchainMessage: (
-            data: {
-                /** @format cell */
-                boc?: Cell;
-                /** @maxItems 5 */
-                batch?: Cell[];
-                meta?: Record<string, string>;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<SendBlockchainMessageData, Error>({
-                path: `/v2/blockchain/message`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    properties: {
-                        boc: { type: 'string', format: 'cell' },
-                        batch: {
-                            type: 'array',
-                            maxItems: 5,
-                            items: { type: 'string', format: 'cell' }
-                        },
-                        meta: { type: 'object', additionalProperties: { type: 'string' } }
-                    }
-                }),
-                ...params
-            });
-
-            return prepareResponse<SendBlockchainMessageData>(req);
-        },
-
-        /**
-         * @description Get blockchain config
-         *
-         * @tags Blockchain
-         * @name GetBlockchainConfig
-         * @request GET:/v2/blockchain/config
-         */
-        getBlockchainConfig: (params: RequestParams = {}) => {
-            const req = this.http.request<GetBlockchainConfigData, Error>({
-                path: `/v2/blockchain/config`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetBlockchainConfigData>(req, {
-                $ref: '#/components/schemas/BlockchainConfig'
-            });
-        },
-
-        /**
-         * @description Get raw blockchain config
-         *
-         * @tags Blockchain
-         * @name GetRawBlockchainConfig
-         * @request GET:/v2/blockchain/config/raw
-         */
-        getRawBlockchainConfig: (params: RequestParams = {}) => {
-            const req = this.http.request<GetRawBlockchainConfigData, Error>({
-                path: `/v2/blockchain/config/raw`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawBlockchainConfigData>(req, {
-                $ref: '#/components/schemas/RawBlockchainConfig'
-            });
-        },
-
-        /**
-         * @description Blockchain account inspect
-         *
-         * @tags Blockchain
-         * @name BlockchainAccountInspect
-         * @request GET:/v2/blockchain/accounts/{account_id}/inspect
-         */
-        blockchainAccountInspect: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<BlockchainAccountInspectData, Error>({
-                path: `/v2/blockchain/accounts/${accountId}/inspect`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<BlockchainAccountInspectData>(req, {
-                $ref: '#/components/schemas/BlockchainAccountInspect'
-            });
-        },
-
-        /**
-         * @description Status
-         *
-         * @tags Utilities
-         * @name Status
-         * @request GET:/v2/status
-         * @deprecated
-         */
-        status: (requestParams: RequestParams = {}) => {
-            const req = this.http.request<StatusData, Error>({
-                path: `/v2/status`,
-                method: 'GET',
-                format: 'json',
-                ...requestParams
-            });
-
-            return prepareResponse<StatusData>(req, { $ref: '#/components/schemas/ServiceStatus' });
-        }
-    };
-    accounts = {
-        /**
-         * @description Get human-friendly information about several accounts without low-level details.
-         *
-         * @tags Accounts
-         * @name GetAccounts
-         * @request POST:/v2/accounts/_bulk
-         */
-        getAccounts: (
-            data: {
-                accountIds: Address[];
-            },
-            query?: {
-                /** @example "usd" */
-                currency?: string;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetAccountsData, Error>({
-                path: `/v2/accounts/_bulk`,
-                method: 'POST',
-                query: query,
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['accountIds'],
-                    properties: {
-                        accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-                    }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountsData>(req, { $ref: '#/components/schemas/Accounts' });
-        },
-
-        /**
-         * @description Get human-friendly information about an account without low-level details.
-         *
-         * @tags Accounts
-         * @name GetAccount
-         * @request GET:/v2/accounts/{account_id}
-         */
-        getAccount: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountData, Error>({
-                path: `/v2/accounts/${accountId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountData>(req, { $ref: '#/components/schemas/Account' });
-        },
-
-        /**
-         * @description Get account's domains
-         *
-         * @tags Accounts
-         * @name AccountDnsBackResolve
-         * @request GET:/v2/accounts/{account_id}/dns/backresolve
-         */
-        accountDnsBackResolve: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<AccountDnsBackResolveData, Error>({
-                path: `/v2/accounts/${accountId}/dns/backresolve`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<AccountDnsBackResolveData>(req, {
-                $ref: '#/components/schemas/DomainNames'
-            });
-        },
-
-        /**
-         * @description Get all Jettons balances by owner address
-         *
-         * @tags Accounts
-         * @name GetAccountJettonsBalances
-         * @request GET:/v2/accounts/{account_id}/jettons
-         */
-        getAccountJettonsBalances: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * accept ton and all possible fiat currencies, separated by commas
-                 * @example ["ton","usd","rub"]
-                 */
-                currencies?: string[];
-                /**
-                 * comma separated list supported extensions
-                 * @example ["custom_payload"]
-                 */
-                supported_extensions?: string[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountJettonsBalancesData, Error>({
-                path: `/v2/accounts/${accountId}/jettons`,
-                method: 'GET',
-                query: query,
-                queryImplode: ['currencies', 'supported_extensions'],
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountJettonsBalancesData>(req, {
-                $ref: '#/components/schemas/JettonsBalances'
-            });
-        },
-
-        /**
-         * @description Get Jetton balance by owner address
-         *
-         * @tags Accounts
-         * @name GetAccountJettonBalance
-         * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}
-         */
-        getAccountJettonBalance: (
-            accountId_Address: Address,
-            jettonId_Address: Address,
-            query?: {
-                /**
-                 * accept ton and all possible fiat currencies, separated by commas
-                 * @example ["ton","usd","rub"]
-                 */
-                currencies?: string[];
-                /**
-                 * comma separated list supported extensions
-                 * @example ["custom_payload"]
-                 */
-                supported_extensions?: string[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const jettonId = jettonId_Address.toRawString();
-            const req = this.http.request<GetAccountJettonBalanceData, Error>({
-                path: `/v2/accounts/${accountId}/jettons/${jettonId}`,
-                method: 'GET',
-                query: query,
-                queryImplode: ['currencies', 'supported_extensions'],
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountJettonBalanceData>(req, {
-                $ref: '#/components/schemas/JettonBalance'
-            });
-        },
-
-        /**
-         * @description Get the transfer jettons history for account
-         *
-         * @tags Accounts
-         * @name GetAccountJettonsHistory
-         * @request GET:/v2/accounts/{account_id}/jettons/history
-         */
-        getAccountJettonsHistory: (
-            accountId_Address: Address,
-            query: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @example 100
-                 */
-                limit: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date?: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountJettonsHistoryData, Error>({
-                path: `/v2/accounts/${accountId}/jettons/history`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountJettonsHistoryData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
-        },
-
-        /**
-         * @description Get the transfer jetton history for account and jetton
-         *
-         * @tags Accounts
-         * @name GetAccountJettonHistoryById
-         * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}/history
-         */
-        getAccountJettonHistoryById: (
-            accountId_Address: Address,
-            jettonId_Address: Address,
-            query: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @example 100
-                 */
-                limit: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date?: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const jettonId = jettonId_Address.toRawString();
-            const req = this.http.request<GetAccountJettonHistoryByIdData, Error>({
-                path: `/v2/accounts/${accountId}/jettons/${jettonId}/history`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountJettonHistoryByIdData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
-        },
-
-        /**
-         * @description Get all NFT items by owner address
-         *
-         * @tags Accounts
-         * @name GetAccountNftItems
-         * @request GET:/v2/accounts/{account_id}/nfts
-         */
-        getAccountNftItems: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * nft collection
-                 * @format address
-                 * @example "0:06d811f426598591b32b2c49f29f66c821368e4acb1de16762b04e0174532465"
-                 */
-                collection?: Address;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @default 1000
-                 */
-                limit?: number;
-                /**
-                 * @min 0
-                 * @default 0
-                 */
-                offset?: number;
-                /**
-                 * Selling nft items in ton implemented usually via transfer items to special selling account. This option enables including items which owned not directly.
-                 * @default false
-                 */
-                indirect_ownership?: boolean;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountNftItemsData, Error>({
-                path: `/v2/accounts/${accountId}/nfts`,
-                method: 'GET',
-                query: query && {
-                    ...query,
-                    collection: query.collection?.toRawString()
-                },
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountNftItemsData>(req, {
-                $ref: '#/components/schemas/NftItems'
-            });
-        },
-
-        /**
-         * @description Get events for an account. Each event is built on top of a trace which is a series of transactions caused by one inbound message. TonAPI looks for known patterns inside the trace and splits the trace into actions, where a single action represents a meaningful high-level operation like a Jetton Transfer or an NFT Purchase. Actions are expected to be shown to users. It is advised not to build any logic on top of actions because actions can be changed at any time.
-         *
-         * @tags Accounts
-         * @name GetAccountEvents
-         * @request GET:/v2/accounts/{account_id}/events
-         */
-        getAccountEvents: (
-            accountId_Address: Address,
-            query: {
-                /**
-                 * Show only events that are initiated by this account
-                 * @default false
-                 */
-                initiator?: boolean;
-                /**
-                 * filter actions where requested account is not real subject (for example sender or receiver jettons)
-                 * @default false
-                 */
-                subject_only?: boolean;
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 100
-                 * @example 20
-                 */
-                limit: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date?: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountEventsData, Error>({
-                path: `/v2/accounts/${accountId}/events`,
-                method: 'GET',
-                query: query,
-                queryImplode: ['initiator'],
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountEventsData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
-        },
-
-        /**
-         * @description Get event for an account by event_id
-         *
-         * @tags Accounts
-         * @name GetAccountEvent
-         * @request GET:/v2/accounts/{account_id}/events/{event_id}
-         */
-        getAccountEvent: (
-            accountId_Address: Address,
-            eventId: string,
-            query?: {
-                /**
-                 * filter actions where requested account is not real subject (for example sender or receiver jettons)
-                 * @default false
-                 */
-                subject_only?: boolean;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountEventData, Error>({
-                path: `/v2/accounts/${accountId}/events/${eventId}`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountEventData>(req, {
-                $ref: '#/components/schemas/AccountEvent'
-            });
-        },
-
-        /**
-         * @description Get traces for account
-         *
-         * @tags Accounts
-         * @name GetAccountTraces
-         * @request GET:/v2/accounts/{account_id}/traces
-         */
-        getAccountTraces: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @default 100
-                 * @example 100
-                 */
-                limit?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountTracesData, Error>({
-                path: `/v2/accounts/${accountId}/traces`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountTracesData>(req, {
-                $ref: '#/components/schemas/TraceIDs'
-            });
-        },
-
-        /**
-         * @description Get all subscriptions by wallet address
-         *
-         * @tags Accounts
-         * @name GetAccountSubscriptions
-         * @request GET:/v2/accounts/{account_id}/subscriptions
-         */
-        getAccountSubscriptions: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountSubscriptionsData, Error>({
-                path: `/v2/accounts/${accountId}/subscriptions`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountSubscriptionsData>(req, {
-                $ref: '#/components/schemas/Subscriptions'
-            });
-        },
-
-        /**
-         * @description Update internal cache for a particular account
-         *
-         * @tags Accounts
-         * @name ReindexAccount
-         * @request POST:/v2/accounts/{account_id}/reindex
-         */
-        reindexAccount: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<ReindexAccountData, Error>({
-                path: `/v2/accounts/${accountId}/reindex`,
-                method: 'POST',
-                ...params
-            });
-
-            return prepareResponse<ReindexAccountData>(req);
-        },
-
-        /**
-         * @description Search by account domain name
-         *
-         * @tags Accounts
-         * @name SearchAccounts
-         * @request GET:/v2/accounts/search
-         */
-        searchAccounts: (
-            query: {
-                /**
-                 * @minLength 3
-                 * @maxLength 15
-                 */
-                name: string;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<SearchAccountsData, Error>({
-                path: `/v2/accounts/search`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<SearchAccountsData>(req, {
-                $ref: '#/components/schemas/FoundAccounts'
-            });
-        },
-
-        /**
-         * @description Get expiring account .ton dns
-         *
-         * @tags Accounts
-         * @name GetAccountDnsExpiring
-         * @request GET:/v2/accounts/{account_id}/dns/expiring
-         */
-        getAccountDnsExpiring: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * number of days before expiration
-                 * @min 1
-                 * @max 3660
-                 */
-                period?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountDnsExpiringData, Error>({
-                path: `/v2/accounts/${accountId}/dns/expiring`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountDnsExpiringData>(req, {
-                $ref: '#/components/schemas/DnsExpiring'
-            });
-        },
-
-        /**
-         * @description Get public key by account id
-         *
-         * @tags Accounts
-         * @name GetAccountPublicKey
-         * @request GET:/v2/accounts/{account_id}/publickey
-         */
-        getAccountPublicKey: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountPublicKeyData, Error>({
-                path: `/v2/accounts/${accountId}/publickey`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountPublicKeyData>(req, {
+            non_bounceable: {
+                required: ['b64', 'b64url'],
                 type: 'object',
-                required: ['public_key'],
-                properties: { public_key: { type: 'string' } }
-            });
-        },
-
-        /**
-         * @description Get account's multisigs
-         *
-         * @tags Accounts
-         * @name GetAccountMultisigs
-         * @request GET:/v2/accounts/{account_id}/multisigs
-         */
-        getAccountMultisigs: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountMultisigsData, Error>({
-                path: `/v2/accounts/${accountId}/multisigs`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountMultisigsData>(req, {
-                $ref: '#/components/schemas/Multisigs'
-            });
-        },
-
-        /**
-         * @description Get account's balance change
-         *
-         * @tags Accounts
-         * @name GetAccountDiff
-         * @request GET:/v2/accounts/{account_id}/diff
-         */
-        getAccountDiff: (
-            accountId_Address: Address,
-            query: {
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date: number;
+                properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
             },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountDiffData, Error>({
-                path: `/v2/accounts/${accountId}/diff`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
+            given_type: { type: 'string' },
+            test_only: { type: 'boolean' }
+        }
+    });
+};
 
-            return prepareResponse<GetAccountDiffData>(req, {
+/**
+ * @description Get reduced blockchain blocks data
+ *
+ * @tags Blockchain
+ * @name GetReducedBlockchainBlocks
+ * @request GET:/v2/blockchain/reduced/blocks
+ */
+export const getReducedBlockchainBlocks = (
+    query: {
+        /** @format int64 */
+        from: number;
+        /** @format int64 */
+        to: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetReducedBlockchainBlocksData, Error>({
+        path: `/v2/blockchain/reduced/blocks`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetReducedBlockchainBlocksData>(req, {
+        $ref: '#/components/schemas/ReducedBlocks'
+    });
+};
+
+/**
+ * @description Get blockchain block data
+ *
+ * @tags Blockchain
+ * @name GetBlockchainBlock
+ * @request GET:/v2/blockchain/blocks/{block_id}
+ */
+export const getBlockchainBlock = (blockId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetBlockchainBlockData, Error>({
+        path: `/v2/blockchain/blocks/${blockId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainBlockData>(req, {
+        $ref: '#/components/schemas/BlockchainBlock'
+    });
+};
+
+/**
+ * @description Get blockchain block shards
+ *
+ * @tags Blockchain
+ * @name GetBlockchainMasterchainShards
+ * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/shards
+ */
+export const getBlockchainMasterchainShards = (
+    masterchainSeqno: number,
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetBlockchainMasterchainShardsData, Error>({
+        path: `/v2/blockchain/masterchain/${masterchainSeqno}/shards`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainMasterchainShardsData>(req, {
+        $ref: '#/components/schemas/BlockchainBlockShards'
+    });
+};
+
+/**
+ * @description Get all blocks in all shards and workchains between target and previous masterchain block according to shards last blocks snapshot in masterchain.  We don't recommend to build your app around this method because it has problem with scalability and will work very slow in the future.
+ *
+ * @tags Blockchain
+ * @name GetBlockchainMasterchainBlocks
+ * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/blocks
+ */
+export const getBlockchainMasterchainBlocks = (
+    masterchainSeqno: number,
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetBlockchainMasterchainBlocksData, Error>({
+        path: `/v2/blockchain/masterchain/${masterchainSeqno}/blocks`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainMasterchainBlocksData>(req, {
+        $ref: '#/components/schemas/BlockchainBlocks'
+    });
+};
+
+/**
+ * @description Get all transactions in all shards and workchains between target and previous masterchain block according to shards last blocks snapshot in masterchain. We don't recommend to build your app around this method because it has problem with scalability and will work very slow in the future.
+ *
+ * @tags Blockchain
+ * @name GetBlockchainMasterchainTransactions
+ * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/transactions
+ */
+export const getBlockchainMasterchainTransactions = (
+    masterchainSeqno: number,
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetBlockchainMasterchainTransactionsData, Error>({
+        path: `/v2/blockchain/masterchain/${masterchainSeqno}/transactions`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainMasterchainTransactionsData>(req, {
+        $ref: '#/components/schemas/Transactions'
+    });
+};
+
+/**
+ * @description Get blockchain config from a specific block, if present.
+ *
+ * @tags Blockchain
+ * @name GetBlockchainConfigFromBlock
+ * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config
+ */
+export const getBlockchainConfigFromBlock = (
+    masterchainSeqno: number,
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetBlockchainConfigFromBlockData, Error>({
+        path: `/v2/blockchain/masterchain/${masterchainSeqno}/config`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainConfigFromBlockData>(req, {
+        $ref: '#/components/schemas/BlockchainConfig'
+    });
+};
+
+/**
+ * @description Get raw blockchain config from a specific block, if present.
+ *
+ * @tags Blockchain
+ * @name GetRawBlockchainConfigFromBlock
+ * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config/raw
+ */
+export const getRawBlockchainConfigFromBlock = (
+    masterchainSeqno: number,
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRawBlockchainConfigFromBlockData, Error>({
+        path: `/v2/blockchain/masterchain/${masterchainSeqno}/config/raw`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawBlockchainConfigFromBlockData>(req, {
+        $ref: '#/components/schemas/RawBlockchainConfig'
+    });
+};
+
+/**
+ * @description Get transactions from block
+ *
+ * @tags Blockchain
+ * @name GetBlockchainBlockTransactions
+ * @request GET:/v2/blockchain/blocks/{block_id}/transactions
+ */
+export const getBlockchainBlockTransactions = (blockId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetBlockchainBlockTransactionsData, Error>({
+        path: `/v2/blockchain/blocks/${blockId}/transactions`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainBlockTransactionsData>(req, {
+        $ref: '#/components/schemas/Transactions'
+    });
+};
+
+/**
+ * @description Get transaction data
+ *
+ * @tags Blockchain
+ * @name GetBlockchainTransaction
+ * @request GET:/v2/blockchain/transactions/{transaction_id}
+ */
+export const getBlockchainTransaction = (transactionId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetBlockchainTransactionData, Error>({
+        path: `/v2/blockchain/transactions/${transactionId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainTransactionData>(req, {
+        $ref: '#/components/schemas/Transaction'
+    });
+};
+
+/**
+ * @description Get transaction data by message hash
+ *
+ * @tags Blockchain
+ * @name GetBlockchainTransactionByMessageHash
+ * @request GET:/v2/blockchain/messages/{msg_id}/transaction
+ */
+export const getBlockchainTransactionByMessageHash = (
+    msgId: string,
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetBlockchainTransactionByMessageHashData, Error>({
+        path: `/v2/blockchain/messages/${msgId}/transaction`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainTransactionByMessageHashData>(req, {
+        $ref: '#/components/schemas/Transaction'
+    });
+};
+
+/**
+ * @description Get blockchain validators
+ *
+ * @tags Blockchain
+ * @name GetBlockchainValidators
+ * @request GET:/v2/blockchain/validators
+ */
+export const getBlockchainValidators = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetBlockchainValidatorsData, Error>({
+        path: `/v2/blockchain/validators`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainValidatorsData>(req, {
+        $ref: '#/components/schemas/Validators'
+    });
+};
+
+/**
+ * @description Get last known masterchain block
+ *
+ * @tags Blockchain
+ * @name GetBlockchainMasterchainHead
+ * @request GET:/v2/blockchain/masterchain-head
+ */
+export const getBlockchainMasterchainHead = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetBlockchainMasterchainHeadData, Error>({
+        path: `/v2/blockchain/masterchain-head`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainMasterchainHeadData>(req, {
+        $ref: '#/components/schemas/BlockchainBlock'
+    });
+};
+
+/**
+ * @description Get low-level information about an account taken directly from the blockchain.
+ *
+ * @tags Blockchain
+ * @name GetBlockchainRawAccount
+ * @request GET:/v2/blockchain/accounts/{account_id}
+ */
+export const getBlockchainRawAccount = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetBlockchainRawAccountData, Error>({
+        path: `/v2/blockchain/accounts/${accountId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainRawAccountData>(req, {
+        $ref: '#/components/schemas/BlockchainRawAccount'
+    });
+};
+
+/**
+ * @description Get account transactions
+ *
+ * @tags Blockchain
+ * @name GetBlockchainAccountTransactions
+ * @request GET:/v2/blockchain/accounts/{account_id}/transactions
+ */
+export const getBlockchainAccountTransactions = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * omit this parameter to get last transactions
+         * @format bigint
+         * @example 39787624000003
+         */
+        after_lt?: bigint;
+        /**
+         * omit this parameter to get last transactions
+         * @format bigint
+         * @example 39787624000003
+         */
+        before_lt?: bigint;
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000
+         * @default 100
+         * @example 100
+         */
+        limit?: number;
+        /**
+         * used to sort the result-set in ascending or descending order by lt.
+         * @default "desc"
+         */
+        sort_order?: 'desc' | 'asc';
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetBlockchainAccountTransactionsData, Error>({
+        path: `/v2/blockchain/accounts/${accountId}/transactions`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainAccountTransactionsData>(req, {
+        $ref: '#/components/schemas/Transactions'
+    });
+};
+
+/**
+ * @description Execute get method for account
+ *
+ * @tags Blockchain
+ * @name ExecGetMethodForBlockchainAccount
+ * @request GET:/v2/blockchain/accounts/{account_id}/methods/{method_name}
+ */
+export const execGetMethodForBlockchainAccount = (
+    accountId_Address: Address,
+    methodName: string,
+    query?: {
+        /**
+         * Supported values:
+         * "NaN" for NaN type,
+         * "Null" for Null type,
+         * 10-base digits for tiny int type (Example: 100500),
+         * 0x-prefixed hex digits for int257 (Example: 0xfa01d78381ae32),
+         * all forms of addresses for slice type (Example: 0:6e731f2e28b73539a7f85ac47ca104d5840b229351189977bb6151d36b5e3f5e),
+         * single-root base64-encoded BOC for cell (Example: "te6ccgEBAQEAAgAAAA=="),
+         * single-root hex-encoded BOC for slice (Example: b5ee9c72010101010002000000)
+         * @example ["0:9a33970f617bcd71acf2cd28357c067aa31859c02820d8f01d74c88063a8f4d8"]
+         */
+        args?: string[];
+        /**
+         * A temporary fix to switch to a scheme with direct ordering of arguments.
+         * If equal to false, then the method takes arguments in direct order,
+         * e.g. for get_nft_content(int index, cell individual_content) we pass a list of arguments [index, individual_content].
+         * If equal to true, then the method takes arguments in reverse order, e.g. [individual_content, index].
+         * @default true
+         */
+        fix_order?: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<ExecGetMethodForBlockchainAccountData, Error>({
+        path: `/v2/blockchain/accounts/${accountId}/methods/${methodName}`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<ExecGetMethodForBlockchainAccountData>(req, {
+        $ref: '#/components/schemas/MethodExecutionResult'
+    });
+};
+
+/**
+ * @description Send message to blockchain
+ *
+ * @tags Blockchain
+ * @name SendBlockchainMessage
+ * @request POST:/v2/blockchain/message
+ */
+export const sendBlockchainMessage = (
+    data: {
+        /** @format cell */
+        boc?: Cell;
+        /** @maxItems 5 */
+        batch?: Cell[];
+        meta?: Record<string, string>;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<SendBlockchainMessageData, Error>({
+        path: `/v2/blockchain/message`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            properties: {
+                boc: { type: 'string', format: 'cell' },
+                batch: { type: 'array', maxItems: 5, items: { type: 'string', format: 'cell' } },
+                meta: { type: 'object', additionalProperties: { type: 'string' } }
+            }
+        }),
+        ...params
+    });
+
+    return prepareResponse<SendBlockchainMessageData>(req);
+};
+
+/**
+ * @description Get blockchain config
+ *
+ * @tags Blockchain
+ * @name GetBlockchainConfig
+ * @request GET:/v2/blockchain/config
+ */
+export const getBlockchainConfig = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetBlockchainConfigData, Error>({
+        path: `/v2/blockchain/config`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetBlockchainConfigData>(req, {
+        $ref: '#/components/schemas/BlockchainConfig'
+    });
+};
+
+/**
+ * @description Get raw blockchain config
+ *
+ * @tags Blockchain
+ * @name GetRawBlockchainConfig
+ * @request GET:/v2/blockchain/config/raw
+ */
+export const getRawBlockchainConfig = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetRawBlockchainConfigData, Error>({
+        path: `/v2/blockchain/config/raw`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawBlockchainConfigData>(req, {
+        $ref: '#/components/schemas/RawBlockchainConfig'
+    });
+};
+
+/**
+ * @description Blockchain account inspect
+ *
+ * @tags Blockchain
+ * @name BlockchainAccountInspect
+ * @request GET:/v2/blockchain/accounts/{account_id}/inspect
+ */
+export const blockchainAccountInspect = (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<BlockchainAccountInspectData, Error>({
+        path: `/v2/blockchain/accounts/${accountId}/inspect`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<BlockchainAccountInspectData>(req, {
+        $ref: '#/components/schemas/BlockchainAccountInspect'
+    });
+};
+
+/**
+ * @description Get human-friendly information about several accounts without low-level details.
+ *
+ * @tags Accounts
+ * @name GetAccounts
+ * @request POST:/v2/accounts/_bulk
+ */
+export const getAccounts = (
+    data: {
+        accountIds: Address[];
+    },
+    query?: {
+        /** @example "usd" */
+        currency?: string;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetAccountsData, Error>({
+        path: `/v2/accounts/_bulk`,
+        method: 'POST',
+        query: query,
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['accountIds'],
+            properties: {
+                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+            }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountsData>(req, { $ref: '#/components/schemas/Accounts' });
+};
+
+/**
+ * @description Get human-friendly information about an account without low-level details.
+ *
+ * @tags Accounts
+ * @name GetAccount
+ * @request GET:/v2/accounts/{account_id}
+ */
+export const getAccount = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountData, Error>({
+        path: `/v2/accounts/${accountId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountData>(req, { $ref: '#/components/schemas/Account' });
+};
+
+/**
+ * @description Get account's domains
+ *
+ * @tags Accounts
+ * @name AccountDnsBackResolve
+ * @request GET:/v2/accounts/{account_id}/dns/backresolve
+ */
+export const accountDnsBackResolve = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<AccountDnsBackResolveData, Error>({
+        path: `/v2/accounts/${accountId}/dns/backresolve`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<AccountDnsBackResolveData>(req, {
+        $ref: '#/components/schemas/DomainNames'
+    });
+};
+
+/**
+ * @description Get all Jettons balances by owner address
+ *
+ * @tags Accounts
+ * @name GetAccountJettonsBalances
+ * @request GET:/v2/accounts/{account_id}/jettons
+ */
+export const getAccountJettonsBalances = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * accept ton and all possible fiat currencies, separated by commas
+         * @example ["ton","usd","rub"]
+         */
+        currencies?: string[];
+        /**
+         * comma separated list supported extensions
+         * @example ["custom_payload"]
+         */
+        supported_extensions?: string[];
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountJettonsBalancesData, Error>({
+        path: `/v2/accounts/${accountId}/jettons`,
+        method: 'GET',
+        query: query,
+        queryImplode: ['currencies', 'supported_extensions'],
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountJettonsBalancesData>(req, {
+        $ref: '#/components/schemas/JettonsBalances'
+    });
+};
+
+/**
+ * @description Get Jetton balance by owner address
+ *
+ * @tags Accounts
+ * @name GetAccountJettonBalance
+ * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}
+ */
+export const getAccountJettonBalance = (
+    accountId_Address: Address,
+    jettonId_Address: Address,
+    query?: {
+        /**
+         * accept ton and all possible fiat currencies, separated by commas
+         * @example ["ton","usd","rub"]
+         */
+        currencies?: string[];
+        /**
+         * comma separated list supported extensions
+         * @example ["custom_payload"]
+         */
+        supported_extensions?: string[];
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const jettonId = jettonId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountJettonBalanceData, Error>({
+        path: `/v2/accounts/${accountId}/jettons/${jettonId}`,
+        method: 'GET',
+        query: query,
+        queryImplode: ['currencies', 'supported_extensions'],
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountJettonBalanceData>(req, {
+        $ref: '#/components/schemas/JettonBalance'
+    });
+};
+
+/**
+ * @description Get the transfer jettons history for account
+ *
+ * @tags Accounts
+ * @name GetAccountJettonsHistory
+ * @request GET:/v2/accounts/{account_id}/jettons/history
+ */
+export const getAccountJettonsHistory = (
+    accountId_Address: Address,
+    query: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @example 100
+         */
+        limit: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date?: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountJettonsHistoryData, Error>({
+        path: `/v2/accounts/${accountId}/jettons/history`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountJettonsHistoryData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description Get the transfer jetton history for account and jetton
+ *
+ * @tags Accounts
+ * @name GetAccountJettonHistoryById
+ * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}/history
+ */
+export const getAccountJettonHistoryById = (
+    accountId_Address: Address,
+    jettonId_Address: Address,
+    query: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @example 100
+         */
+        limit: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date?: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const jettonId = jettonId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountJettonHistoryByIdData, Error>({
+        path: `/v2/accounts/${accountId}/jettons/${jettonId}/history`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountJettonHistoryByIdData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description Get all NFT items by owner address
+ *
+ * @tags Accounts
+ * @name GetAccountNftItems
+ * @request GET:/v2/accounts/{account_id}/nfts
+ */
+export const getAccountNftItems = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * nft collection
+         * @format address
+         * @example "0:06d811f426598591b32b2c49f29f66c821368e4acb1de16762b04e0174532465"
+         */
+        collection?: Address;
+        /**
+         * @min 1
+         * @max 1000
+         * @default 1000
+         */
+        limit?: number;
+        /**
+         * @min 0
+         * @default 0
+         */
+        offset?: number;
+        /**
+         * Selling nft items in ton implemented usually via transfer items to special selling account. This option enables including items which owned not directly.
+         * @default false
+         */
+        indirect_ownership?: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountNftItemsData, Error>({
+        path: `/v2/accounts/${accountId}/nfts`,
+        method: 'GET',
+        query: query && {
+            ...query,
+            collection: query.collection?.toRawString()
+        },
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountNftItemsData>(req, { $ref: '#/components/schemas/NftItems' });
+};
+
+/**
+ * @description Get events for an account. Each event is built on top of a trace which is a series of transactions caused by one inbound message. TonAPI looks for known patterns inside the trace and splits the trace into actions, where a single action represents a meaningful high-level operation like a Jetton Transfer or an NFT Purchase. Actions are expected to be shown to users. It is advised not to build any logic on top of actions because actions can be changed at any time.
+ *
+ * @tags Accounts
+ * @name GetAccountEvents
+ * @request GET:/v2/accounts/{account_id}/events
+ */
+export const getAccountEvents = (
+    accountId_Address: Address,
+    query: {
+        /**
+         * Show only events that are initiated by this account
+         * @default false
+         */
+        initiator?: boolean;
+        /**
+         * filter actions where requested account is not real subject (for example sender or receiver jettons)
+         * @default false
+         */
+        subject_only?: boolean;
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 100
+         * @example 20
+         */
+        limit: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date?: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountEventsData, Error>({
+        path: `/v2/accounts/${accountId}/events`,
+        method: 'GET',
+        query: query,
+        queryImplode: ['initiator'],
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountEventsData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description Get event for an account by event_id
+ *
+ * @tags Accounts
+ * @name GetAccountEvent
+ * @request GET:/v2/accounts/{account_id}/events/{event_id}
+ */
+export const getAccountEvent = (
+    accountId_Address: Address,
+    eventId: string,
+    query?: {
+        /**
+         * filter actions where requested account is not real subject (for example sender or receiver jettons)
+         * @default false
+         */
+        subject_only?: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountEventData, Error>({
+        path: `/v2/accounts/${accountId}/events/${eventId}`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountEventData>(req, { $ref: '#/components/schemas/AccountEvent' });
+};
+
+/**
+ * @description Get traces for account
+ *
+ * @tags Accounts
+ * @name GetAccountTraces
+ * @request GET:/v2/accounts/{account_id}/traces
+ */
+export const getAccountTraces = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @default 100
+         * @example 100
+         */
+        limit?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountTracesData, Error>({
+        path: `/v2/accounts/${accountId}/traces`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountTracesData>(req, { $ref: '#/components/schemas/TraceIDs' });
+};
+
+/**
+ * @description Get all subscriptions by wallet address
+ *
+ * @tags Accounts
+ * @name GetAccountSubscriptions
+ * @request GET:/v2/accounts/{account_id}/subscriptions
+ */
+export const getAccountSubscriptions = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountSubscriptionsData, Error>({
+        path: `/v2/accounts/${accountId}/subscriptions`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountSubscriptionsData>(req, {
+        $ref: '#/components/schemas/Subscriptions'
+    });
+};
+
+/**
+ * @description Update internal cache for a particular account
+ *
+ * @tags Accounts
+ * @name ReindexAccount
+ * @request POST:/v2/accounts/{account_id}/reindex
+ */
+export const reindexAccount = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<ReindexAccountData, Error>({
+        path: `/v2/accounts/${accountId}/reindex`,
+        method: 'POST',
+        ...params
+    });
+
+    return prepareResponse<ReindexAccountData>(req);
+};
+
+/**
+ * @description Search by account domain name
+ *
+ * @tags Accounts
+ * @name SearchAccounts
+ * @request GET:/v2/accounts/search
+ */
+export const searchAccounts = (
+    query: {
+        /**
+         * @minLength 3
+         * @maxLength 15
+         */
+        name: string;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<SearchAccountsData, Error>({
+        path: `/v2/accounts/search`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<SearchAccountsData>(req, { $ref: '#/components/schemas/FoundAccounts' });
+};
+
+/**
+ * @description Get expiring account .ton dns
+ *
+ * @tags Accounts
+ * @name GetAccountDnsExpiring
+ * @request GET:/v2/accounts/{account_id}/dns/expiring
+ */
+export const getAccountDnsExpiring = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * number of days before expiration
+         * @min 1
+         * @max 3660
+         */
+        period?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountDnsExpiringData, Error>({
+        path: `/v2/accounts/${accountId}/dns/expiring`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountDnsExpiringData>(req, {
+        $ref: '#/components/schemas/DnsExpiring'
+    });
+};
+
+/**
+ * @description Get public key by account id
+ *
+ * @tags Accounts
+ * @name GetAccountPublicKey
+ * @request GET:/v2/accounts/{account_id}/publickey
+ */
+export const getAccountPublicKey = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountPublicKeyData, Error>({
+        path: `/v2/accounts/${accountId}/publickey`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountPublicKeyData>(req, {
+        type: 'object',
+        required: ['public_key'],
+        properties: { public_key: { type: 'string' } }
+    });
+};
+
+/**
+ * @description Get account's multisigs
+ *
+ * @tags Accounts
+ * @name GetAccountMultisigs
+ * @request GET:/v2/accounts/{account_id}/multisigs
+ */
+export const getAccountMultisigs = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountMultisigsData, Error>({
+        path: `/v2/accounts/${accountId}/multisigs`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountMultisigsData>(req, {
+        $ref: '#/components/schemas/Multisigs'
+    });
+};
+
+/**
+ * @description Get account's balance change
+ *
+ * @tags Accounts
+ * @name GetAccountDiff
+ * @request GET:/v2/accounts/{account_id}/diff
+ */
+export const getAccountDiff = (
+    accountId_Address: Address,
+    query: {
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountDiffData, Error>({
+        path: `/v2/accounts/${accountId}/diff`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountDiffData>(req, {
+        type: 'object',
+        required: ['balance_change'],
+        properties: { balance_change: { type: 'integer', format: 'int64' } }
+    });
+};
+
+/**
+ * @description Get the transfer history of extra currencies for an account.
+ *
+ * @tags Accounts
+ * @name GetAccountExtraCurrencyHistoryById
+ * @request GET:/v2/accounts/{account_id}/extra-currency/{id}/history
+ */
+export const getAccountExtraCurrencyHistoryById = (
+    accountId_Address: Address,
+    id: number,
+    query: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @example 100
+         */
+        limit: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date?: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountExtraCurrencyHistoryByIdData, Error>({
+        path: `/v2/accounts/${accountId}/extra-currency/${id}/history`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountExtraCurrencyHistoryByIdData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description Get the transfer nft history
+ *
+ * @tags NFT
+ * @name GetAccountNftHistory
+ * @request GET:/v2/accounts/{account_id}/nfts/history
+ */
+export const getAccountNftHistory = (
+    accountId_Address: Address,
+    query: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @example 100
+         */
+        limit: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date?: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountNftHistoryData, Error>({
+        path: `/v2/accounts/${accountId}/nfts/history`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountNftHistoryData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description Get NFT collections
+ *
+ * @tags NFT
+ * @name GetNftCollections
+ * @request GET:/v2/nfts/collections
+ */
+export const getNftCollections = (
+    query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000
+         * @default 100
+         * @example 15
+         */
+        limit?: number;
+        /**
+         * @format int32
+         * @min 0
+         * @default 0
+         * @example 10
+         */
+        offset?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetNftCollectionsData, Error>({
+        path: `/v2/nfts/collections`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetNftCollectionsData>(req, {
+        $ref: '#/components/schemas/NftCollections'
+    });
+};
+
+/**
+ * @description Get NFT collection by collection address
+ *
+ * @tags NFT
+ * @name GetNftCollection
+ * @request GET:/v2/nfts/collections/{account_id}
+ */
+export const getNftCollection = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetNftCollectionData, Error>({
+        path: `/v2/nfts/collections/${accountId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetNftCollectionData>(req, {
+        $ref: '#/components/schemas/NftCollection'
+    });
+};
+
+/**
+ * @description Get NFT collection items by their addresses
+ *
+ * @tags NFT
+ * @name GetNftCollectionItemsByAddresses
+ * @request POST:/v2/nfts/collections/_bulk
+ */
+export const getNftCollectionItemsByAddresses = (
+    data: {
+        accountIds: Address[];
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetNftCollectionItemsByAddressesData, Error>({
+        path: `/v2/nfts/collections/_bulk`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['accountIds'],
+            properties: {
+                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+            }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetNftCollectionItemsByAddressesData>(req, {
+        $ref: '#/components/schemas/NftCollections'
+    });
+};
+
+/**
+ * @description Get NFT items from collection by collection address
+ *
+ * @tags NFT
+ * @name GetItemsFromCollection
+ * @request GET:/v2/nfts/collections/{account_id}/items
+ */
+export const getItemsFromCollection = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * @min 1
+         * @max 1000
+         * @default 1000
+         */
+        limit?: number;
+        /**
+         * @min 0
+         * @default 0
+         */
+        offset?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetItemsFromCollectionData, Error>({
+        path: `/v2/nfts/collections/${accountId}/items`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetItemsFromCollectionData>(req, {
+        $ref: '#/components/schemas/NftItems'
+    });
+};
+
+/**
+ * @description Get NFT items by their addresses
+ *
+ * @tags NFT
+ * @name GetNftItemsByAddresses
+ * @request POST:/v2/nfts/_bulk
+ */
+export const getNftItemsByAddresses = (
+    data: {
+        accountIds: Address[];
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetNftItemsByAddressesData, Error>({
+        path: `/v2/nfts/_bulk`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['accountIds'],
+            properties: {
+                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+            }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetNftItemsByAddressesData>(req, {
+        $ref: '#/components/schemas/NftItems'
+    });
+};
+
+/**
+ * @description Get NFT item by its address
+ *
+ * @tags NFT
+ * @name GetNftItemByAddress
+ * @request GET:/v2/nfts/{account_id}
+ */
+export const getNftItemByAddress = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetNftItemByAddressData, Error>({
+        path: `/v2/nfts/${accountId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetNftItemByAddressData>(req, { $ref: '#/components/schemas/NftItem' });
+};
+
+/**
+ * @description Get the transfer nfts history for account
+ *
+ * @tags NFT
+ * @name GetNftHistoryById
+ * @request GET:/v2/nfts/{account_id}/history
+ */
+export const getNftHistoryById = (
+    accountId_Address: Address,
+    query: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @example 100
+         */
+        limit: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date?: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetNftHistoryByIdData, Error>({
+        path: `/v2/nfts/${accountId}/history`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetNftHistoryByIdData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description Get full information about domain name
+ *
+ * @tags DNS
+ * @name GetDnsInfo
+ * @request GET:/v2/dns/{domain_name}
+ */
+export const getDnsInfo = (domainName: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetDnsInfoData, Error>({
+        path: `/v2/dns/${domainName}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetDnsInfoData>(req, { $ref: '#/components/schemas/DomainInfo' });
+};
+
+/**
+ * @description DNS resolve for domain name
+ *
+ * @tags DNS
+ * @name DnsResolve
+ * @request GET:/v2/dns/{domain_name}/resolve
+ */
+export const dnsResolve = (domainName: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<DnsResolveData, Error>({
+        path: `/v2/dns/${domainName}/resolve`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<DnsResolveData>(req, { $ref: '#/components/schemas/DnsRecord' });
+};
+
+/**
+ * @description Get domain bids
+ *
+ * @tags DNS
+ * @name GetDomainBids
+ * @request GET:/v2/dns/{domain_name}/bids
+ */
+export const getDomainBids = (domainName: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetDomainBidsData, Error>({
+        path: `/v2/dns/${domainName}/bids`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetDomainBidsData>(req, { $ref: '#/components/schemas/DomainBids' });
+};
+
+/**
+ * @description Get all auctions
+ *
+ * @tags DNS
+ * @name GetAllAuctions
+ * @request GET:/v2/dns/auctions
+ */
+export const getAllAuctions = (
+    query?: {
+        /**
+         * domain filter for current auctions "ton" or "t.me"
+         * @example "ton"
+         */
+        tld?: string;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetAllAuctionsData, Error>({
+        path: `/v2/dns/auctions`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAllAuctionsData>(req, { $ref: '#/components/schemas/Auctions' });
+};
+
+/**
+ * @description Get the trace by trace ID or hash of any transaction in trace
+ *
+ * @tags Traces
+ * @name GetTrace
+ * @request GET:/v2/traces/{trace_id}
+ */
+export const getTrace = (traceId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetTraceData, Error>({
+        path: `/v2/traces/${traceId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetTraceData>(req, { $ref: '#/components/schemas/Trace' });
+};
+
+/**
+ * @description Get an event either by event ID or a hash of any transaction in a trace. An event is built on top of a trace which is a series of transactions caused by one inbound message. TonAPI looks for known patterns inside the trace and splits the trace into actions, where a single action represents a meaningful high-level operation like a Jetton Transfer or an NFT Purchase. Actions are expected to be shown to users. It is advised not to build any logic on top of actions because actions can be changed at any time.
+ *
+ * @tags Events
+ * @name GetEvent
+ * @request GET:/v2/events/{event_id}
+ */
+export const getEvent = (eventId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetEventData, Error>({
+        path: `/v2/events/${eventId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetEventData>(req, { $ref: '#/components/schemas/Event' });
+};
+
+/**
+ * @description Get all inscriptions by owner address. It's experimental API and can be dropped in the future.
+ *
+ * @tags Inscriptions
+ * @name GetAccountInscriptions
+ * @request GET:/v2/experimental/accounts/{account_id}/inscriptions
+ */
+export const getAccountInscriptions = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * @min 1
+         * @max 1000
+         * @default 1000
+         */
+        limit?: number;
+        /**
+         * @min 0
+         * @default 0
+         */
+        offset?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountInscriptionsData, Error>({
+        path: `/v2/experimental/accounts/${accountId}/inscriptions`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountInscriptionsData>(req, {
+        $ref: '#/components/schemas/InscriptionBalances'
+    });
+};
+
+/**
+ * @description Get the transfer inscriptions history for account. It's experimental API and can be dropped in the future.
+ *
+ * @tags Inscriptions
+ * @name GetAccountInscriptionsHistory
+ * @request GET:/v2/experimental/accounts/{account_id}/inscriptions/history
+ */
+export const getAccountInscriptionsHistory = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @default 100
+         * @example 100
+         */
+        limit?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountInscriptionsHistoryData, Error>({
+        path: `/v2/experimental/accounts/${accountId}/inscriptions/history`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountInscriptionsHistoryData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description Get the transfer inscriptions history for account. It's experimental API and can be dropped in the future.
+ *
+ * @tags Inscriptions
+ * @name GetAccountInscriptionsHistoryByTicker
+ * @request GET:/v2/experimental/accounts/{account_id}/inscriptions/{ticker}/history
+ */
+export const getAccountInscriptionsHistoryByTicker = (
+    accountId_Address: Address,
+    ticker: string,
+    query?: {
+        /**
+         * omit this parameter to get last events
+         * @format bigint
+         * @example 25758317000002
+         */
+        before_lt?: bigint;
+        /**
+         * @min 1
+         * @max 1000
+         * @default 100
+         * @example 100
+         */
+        limit?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountInscriptionsHistoryByTickerData, Error>({
+        path: `/v2/experimental/accounts/${accountId}/inscriptions/${ticker}/history`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountInscriptionsHistoryByTickerData>(req, {
+        $ref: '#/components/schemas/AccountEvents'
+    });
+};
+
+/**
+ * @description return comment for making operation with inscription. please don't use it if you don't know what you are doing
+ *
+ * @tags Inscriptions
+ * @name GetInscriptionOpTemplate
+ * @request GET:/v2/experimental/inscriptions/op-template
+ */
+export const getInscriptionOpTemplate = (
+    query: {
+        /** @example "ton20" */
+        type: 'ton20' | 'gram20';
+        destination?: string;
+        comment?: string;
+        /** @example "transfer" */
+        operation: 'transfer';
+        /**
+         * @format bigint
+         * @example "1000000000"
+         */
+        amount: bigint;
+        /** @example "nano" */
+        ticker: string;
+        /** @example "UQAs87W4yJHlF8mt29ocA4agnMrLsOP69jC1HPyBUjJay7Mg" */
+        who: string;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetInscriptionOpTemplateData, Error>({
+        path: `/v2/experimental/inscriptions/op-template`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetInscriptionOpTemplateData>(req, {
+        type: 'object',
+        required: ['comment', 'destination'],
+        properties: { comment: { type: 'string' }, destination: { type: 'string' } }
+    });
+};
+
+/**
+ * @description Get a list of all indexed jetton masters in the blockchain.
+ *
+ * @tags Jettons
+ * @name GetJettons
+ * @request GET:/v2/jettons
+ */
+export const getJettons = (
+    query?: {
+        /**
+         * @format int32
+         * @min 1
+         * @max 1000
+         * @default 100
+         * @example 15
+         */
+        limit?: number;
+        /**
+         * @format int32
+         * @min 0
+         * @default 0
+         * @example 10
+         */
+        offset?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetJettonsData, Error>({
+        path: `/v2/jettons`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetJettonsData>(req, { $ref: '#/components/schemas/Jettons' });
+};
+
+/**
+ * @description Get jetton metadata by jetton master address
+ *
+ * @tags Jettons
+ * @name GetJettonInfo
+ * @request GET:/v2/jettons/{account_id}
+ */
+export const getJettonInfo = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetJettonInfoData, Error>({
+        path: `/v2/jettons/${accountId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetJettonInfoData>(req, { $ref: '#/components/schemas/JettonInfo' });
+};
+
+/**
+ * @description Get jetton metadata items by jetton master addresses
+ *
+ * @tags Jettons
+ * @name GetJettonInfosByAddresses
+ * @request POST:/v2/jettons/_bulk
+ */
+export const getJettonInfosByAddresses = (
+    data: {
+        accountIds: Address[];
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetJettonInfosByAddressesData, Error>({
+        path: `/v2/jettons/_bulk`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['accountIds'],
+            properties: {
+                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+            }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetJettonInfosByAddressesData>(req, {
+        $ref: '#/components/schemas/Jettons'
+    });
+};
+
+/**
+ * @description Get jetton's holders
+ *
+ * @tags Jettons
+ * @name GetJettonHolders
+ * @request GET:/v2/jettons/{account_id}/holders
+ */
+export const getJettonHolders = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * @min 1
+         * @max 1000
+         * @default 1000
+         */
+        limit?: number;
+        /**
+         * @min 0
+         * @default 0
+         */
+        offset?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetJettonHoldersData, Error>({
+        path: `/v2/jettons/${accountId}/holders`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetJettonHoldersData>(req, {
+        $ref: '#/components/schemas/JettonHolders'
+    });
+};
+
+/**
+ * @description Get jetton's custom payload and state init required for transfer
+ *
+ * @tags Jettons
+ * @name GetJettonTransferPayload
+ * @request GET:/v2/jettons/{jetton_id}/transfer/{account_id}/payload
+ */
+export const getJettonTransferPayload = (
+    accountId_Address: Address,
+    jettonId_Address: Address,
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const jettonId = jettonId_Address.toRawString();
+    const req = getHttpClient().request<GetJettonTransferPayloadData, Error>({
+        path: `/v2/jettons/${jettonId}/transfer/${accountId}/payload`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetJettonTransferPayloadData>(req, {
+        $ref: '#/components/schemas/JettonTransferPayload'
+    });
+};
+
+/**
+ * @description Get only jetton transfers in the event
+ *
+ * @tags Jettons
+ * @name GetJettonsEvents
+ * @request GET:/v2/events/{event_id}/jettons
+ */
+export const getJettonsEvents = (eventId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetJettonsEventsData, Error>({
+        path: `/v2/events/${eventId}/jettons`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetJettonsEventsData>(req, { $ref: '#/components/schemas/Event' });
+};
+
+/**
+ * @description Get extra currency info by id
+ *
+ * @tags ExtraCurrency
+ * @name GetExtraCurrencyInfo
+ * @request GET:/v2/extra-currency/{id}
+ */
+export const getExtraCurrencyInfo = (id: number, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetExtraCurrencyInfoData, Error>({
+        path: `/v2/extra-currency/${id}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetExtraCurrencyInfoData>(req, {
+        $ref: '#/components/schemas/EcPreview'
+    });
+};
+
+/**
+ * @description All pools where account participates
+ *
+ * @tags Staking
+ * @name GetAccountNominatorsPools
+ * @request GET:/v2/staking/nominator/{account_id}/pools
+ */
+export const getAccountNominatorsPools = (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountNominatorsPoolsData, Error>({
+        path: `/v2/staking/nominator/${accountId}/pools`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountNominatorsPoolsData>(req, {
+        $ref: '#/components/schemas/AccountStaking'
+    });
+};
+
+/**
+ * @description Stacking pool info
+ *
+ * @tags Staking
+ * @name GetStakingPoolInfo
+ * @request GET:/v2/staking/pool/{account_id}
+ */
+export const getStakingPoolInfo = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetStakingPoolInfoData, Error>({
+        path: `/v2/staking/pool/${accountId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetStakingPoolInfoData>(req, {
+        type: 'object',
+        required: ['implementation', 'pool'],
+        properties: {
+            implementation: { $ref: '#/components/schemas/PoolImplementation' },
+            pool: { $ref: '#/components/schemas/PoolInfo' }
+        }
+    });
+};
+
+/**
+ * @description Pool history
+ *
+ * @tags Staking
+ * @name GetStakingPoolHistory
+ * @request GET:/v2/staking/pool/{account_id}/history
+ */
+export const getStakingPoolHistory = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetStakingPoolHistoryData, Error>({
+        path: `/v2/staking/pool/${accountId}/history`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetStakingPoolHistoryData>(req, {
+        type: 'object',
+        required: ['apy'],
+        properties: { apy: { type: 'array', items: { $ref: '#/components/schemas/ApyHistory' } } }
+    });
+};
+
+/**
+ * @description All pools available in network
+ *
+ * @tags Staking
+ * @name GetStakingPools
+ * @request GET:/v2/staking/pools
+ */
+export const getStakingPools = (
+    query?: {
+        /**
+         * account ID
+         * @format address
+         * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
+         */
+        available_for?: Address;
+        /**
+         * return also pools not from white list - just compatible by interfaces (maybe dangerous!)
+         * @example false
+         */
+        include_unverified?: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetStakingPoolsData, Error>({
+        path: `/v2/staking/pools`,
+        method: 'GET',
+        query: query && {
+            ...query,
+            available_for: query.available_for?.toRawString()
+        },
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetStakingPoolsData>(req, {
+        type: 'object',
+        required: ['pools', 'implementations'],
+        properties: {
+            pools: { type: 'array', items: { $ref: '#/components/schemas/PoolInfo' } },
+            implementations: {
                 type: 'object',
-                required: ['balance_change'],
-                properties: { balance_change: { type: 'integer', format: 'int64' } }
-            });
-        },
+                additionalProperties: { $ref: '#/components/schemas/PoolImplementation' }
+            }
+        }
+    });
+};
 
+/**
+ * @description Get TON storage providers deployed to the blockchain.
+ *
+ * @tags Storage
+ * @name GetStorageProviders
+ * @request GET:/v2/storage/providers
+ */
+export const getStorageProviders = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetStorageProvidersData, Error>({
+        path: `/v2/storage/providers`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetStorageProvidersData>(req, {
+        type: 'object',
+        required: ['providers'],
+        properties: {
+            providers: { type: 'array', items: { $ref: '#/components/schemas/StorageProvider' } }
+        }
+    });
+};
+
+/**
+ * @description Get the token price in the chosen currency for display only. Don’t use this for financial transactions.
+ *
+ * @tags Rates
+ * @name GetRates
+ * @request GET:/v2/rates
+ */
+export const getRates = (
+    query: {
         /**
-         * @description Get the transfer history of extra currencies for an account.
-         *
-         * @tags Accounts
-         * @name GetAccountExtraCurrencyHistoryById
-         * @request GET:/v2/accounts/{account_id}/extra-currency/{id}/history
+         * accept ton and jetton master addresses, separated by commas
+         * @maxItems 100
+         * @example ["ton"]
          */
-        getAccountExtraCurrencyHistoryById: (
-            accountId_Address: Address,
-            id: number,
-            query: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @example 100
-                 */
-                limit: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date?: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountExtraCurrencyHistoryByIdData, Error>({
-                path: `/v2/accounts/${accountId}/extra-currency/${id}/history`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountExtraCurrencyHistoryByIdData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
-        },
-
+        tokens: string[];
         /**
-         * @description parse address and display in all formats
-         *
-         * @tags Utilities
-         * @name AddressParse
-         * @request GET:/v2/address/{account_id}/parse
-         * @deprecated
+         * accept ton and all possible fiat currencies, separated by commas
+         * @maxItems 50
+         * @example ["ton","usd","rub"]
          */
-        addressParse: (accountId_Address: Address, requestParams: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<AddressParseData, Error>({
-                path: `/v2/address/${accountId}/parse`,
-                method: 'GET',
-                format: 'json',
-                ...requestParams
-            });
+        currencies: string[];
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRatesData, Error>({
+        path: `/v2/rates`,
+        method: 'GET',
+        query: query,
+        queryImplode: ['tokens', 'currencies'],
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<AddressParseData>(req, {
+    return prepareResponse<GetRatesData>(req, {
+        type: 'object',
+        required: ['rates'],
+        properties: {
+            rates: {
                 type: 'object',
-                required: ['raw_form', 'bounceable', 'non_bounceable', 'given_type', 'test_only'],
-                properties: {
-                    raw_form: { type: 'string', format: 'address' },
-                    bounceable: {
-                        required: ['b64', 'b64url'],
-                        type: 'object',
-                        properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
-                    },
-                    non_bounceable: {
-                        required: ['b64', 'b64url'],
-                        type: 'object',
-                        properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
-                    },
-                    given_type: { type: 'string' },
-                    test_only: { type: 'boolean' }
-                }
-            });
+                additionalProperties: { $ref: '#/components/schemas/TokenRates' }
+            }
         }
-    };
-    nft = {
-        /**
-         * @description Get the transfer nft history
-         *
-         * @tags NFT
-         * @name GetAccountNftHistory
-         * @request GET:/v2/accounts/{account_id}/nfts/history
-         */
-        getAccountNftHistory: (
-            accountId_Address: Address,
-            query: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @example 100
-                 */
-                limit: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date?: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountNftHistoryData, Error>({
-                path: `/v2/accounts/${accountId}/nfts/history`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
+    });
+};
 
-            return prepareResponse<GetAccountNftHistoryData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
+/**
+ * @description Get chart by token
+ *
+ * @tags Rates
+ * @name GetChartRates
+ * @request GET:/v2/rates/chart
+ */
+export const getChartRates = (
+    query: {
+        /**
+         * accept jetton master address
+         * @format address
+         */
+        token: Address;
+        /** @example "usd" */
+        currency?: string;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        start_date?: number;
+        /**
+         * @format int64
+         * @max 2114380800
+         * @example 1668436763
+         */
+        end_date?: number;
+        /**
+         * @format int
+         * @min 0
+         * @max 200
+         * @default 200
+         */
+        points_count?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetChartRatesData, Error>({
+        path: `/v2/rates/chart`,
+        method: 'GET',
+        query: query && {
+            ...query,
+            token: query.token?.toRawString()
         },
+        format: 'json',
+        ...params
+    });
 
-        /**
-         * @description Get NFT collections
-         *
-         * @tags NFT
-         * @name GetNftCollections
-         * @request GET:/v2/nfts/collections
-         */
-        getNftCollections: (
-            query?: {
-                /**
-                 * @format int32
-                 * @min 1
-                 * @max 1000
-                 * @default 100
-                 * @example 15
-                 */
-                limit?: number;
-                /**
-                 * @format int32
-                 * @min 0
-                 * @default 0
-                 * @example 10
-                 */
-                offset?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetNftCollectionsData, Error>({
-                path: `/v2/nfts/collections`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetNftCollectionsData>(req, {
-                $ref: '#/components/schemas/NftCollections'
-            });
-        },
-
-        /**
-         * @description Get NFT collection by collection address
-         *
-         * @tags NFT
-         * @name GetNftCollection
-         * @request GET:/v2/nfts/collections/{account_id}
-         */
-        getNftCollection: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetNftCollectionData, Error>({
-                path: `/v2/nfts/collections/${accountId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetNftCollectionData>(req, {
-                $ref: '#/components/schemas/NftCollection'
-            });
-        },
-
-        /**
-         * @description Get NFT collection items by their addresses
-         *
-         * @tags NFT
-         * @name GetNftCollectionItemsByAddresses
-         * @request POST:/v2/nfts/collections/_bulk
-         */
-        getNftCollectionItemsByAddresses: (
-            data: {
-                accountIds: Address[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetNftCollectionItemsByAddressesData, Error>({
-                path: `/v2/nfts/collections/_bulk`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['accountIds'],
-                    properties: {
-                        accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-                    }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetNftCollectionItemsByAddressesData>(req, {
-                $ref: '#/components/schemas/NftCollections'
-            });
-        },
-
-        /**
-         * @description Get NFT items from collection by collection address
-         *
-         * @tags NFT
-         * @name GetItemsFromCollection
-         * @request GET:/v2/nfts/collections/{account_id}/items
-         */
-        getItemsFromCollection: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @default 1000
-                 */
-                limit?: number;
-                /**
-                 * @min 0
-                 * @default 0
-                 */
-                offset?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetItemsFromCollectionData, Error>({
-                path: `/v2/nfts/collections/${accountId}/items`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetItemsFromCollectionData>(req, {
-                $ref: '#/components/schemas/NftItems'
-            });
-        },
-
-        /**
-         * @description Get NFT items by their addresses
-         *
-         * @tags NFT
-         * @name GetNftItemsByAddresses
-         * @request POST:/v2/nfts/_bulk
-         */
-        getNftItemsByAddresses: (
-            data: {
-                accountIds: Address[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetNftItemsByAddressesData, Error>({
-                path: `/v2/nfts/_bulk`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['accountIds'],
-                    properties: {
-                        accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-                    }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetNftItemsByAddressesData>(req, {
-                $ref: '#/components/schemas/NftItems'
-            });
-        },
-
-        /**
-         * @description Get NFT item by its address
-         *
-         * @tags NFT
-         * @name GetNftItemByAddress
-         * @request GET:/v2/nfts/{account_id}
-         */
-        getNftItemByAddress: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetNftItemByAddressData, Error>({
-                path: `/v2/nfts/${accountId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetNftItemByAddressData>(req, {
-                $ref: '#/components/schemas/NftItem'
-            });
-        },
-
-        /**
-         * @description Get the transfer nfts history for account
-         *
-         * @tags NFT
-         * @name GetNftHistoryById
-         * @request GET:/v2/nfts/{account_id}/history
-         */
-        getNftHistoryById: (
-            accountId_Address: Address,
-            query: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @example 100
-                 */
-                limit: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date?: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetNftHistoryByIdData, Error>({
-                path: `/v2/nfts/${accountId}/history`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetNftHistoryByIdData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
+    return prepareResponse<GetChartRatesData>(req, {
+        type: 'object',
+        required: ['points'],
+        properties: {
+            points: { type: 'array', items: { $ref: '#/components/schemas/ChartPoints' } }
         }
-    };
-    dns = {
-        /**
-         * @description Get full information about domain name
-         *
-         * @tags DNS
-         * @name GetDnsInfo
-         * @request GET:/v2/dns/{domain_name}
-         */
-        getDnsInfo: (domainName: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetDnsInfoData, Error>({
-                path: `/v2/dns/${domainName}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+    });
+};
 
-            return prepareResponse<GetDnsInfoData>(req, {
-                $ref: '#/components/schemas/DomainInfo'
-            });
-        },
+/**
+ * @description Get the TON price from markets
+ *
+ * @tags Rates
+ * @name GetMarketsRates
+ * @request GET:/v2/rates/markets
+ */
+export const getMarketsRates = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetMarketsRatesData, Error>({
+        path: `/v2/rates/markets`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
 
-        /**
-         * @description DNS resolve for domain name
-         *
-         * @tags DNS
-         * @name DnsResolve
-         * @request GET:/v2/dns/{domain_name}/resolve
-         */
-        dnsResolve: (domainName: string, params: RequestParams = {}) => {
-            const req = this.http.request<DnsResolveData, Error>({
-                path: `/v2/dns/${domainName}/resolve`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<DnsResolveData>(req, { $ref: '#/components/schemas/DnsRecord' });
-        },
-
-        /**
-         * @description Get domain bids
-         *
-         * @tags DNS
-         * @name GetDomainBids
-         * @request GET:/v2/dns/{domain_name}/bids
-         */
-        getDomainBids: (domainName: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetDomainBidsData, Error>({
-                path: `/v2/dns/${domainName}/bids`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetDomainBidsData>(req, {
-                $ref: '#/components/schemas/DomainBids'
-            });
-        },
-
-        /**
-         * @description Get all auctions
-         *
-         * @tags DNS
-         * @name GetAllAuctions
-         * @request GET:/v2/dns/auctions
-         */
-        getAllAuctions: (
-            query?: {
-                /**
-                 * domain filter for current auctions "ton" or "t.me"
-                 * @example "ton"
-                 */
-                tld?: string;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetAllAuctionsData, Error>({
-                path: `/v2/dns/auctions`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAllAuctionsData>(req, {
-                $ref: '#/components/schemas/Auctions'
-            });
+    return prepareResponse<GetMarketsRatesData>(req, {
+        type: 'object',
+        required: ['markets'],
+        properties: {
+            markets: { type: 'array', items: { $ref: '#/components/schemas/MarketTonRates' } }
         }
-    };
-    traces = {
+    });
+};
+
+/**
+ * @description Get a payload for further token receipt
+ *
+ * @tags Connect
+ * @name GetTonConnectPayload
+ * @request GET:/v2/tonconnect/payload
+ */
+export const getTonConnectPayload = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetTonConnectPayloadData, Error>({
+        path: `/v2/tonconnect/payload`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetTonConnectPayloadData>(req, {
+        type: 'object',
+        required: ['payload'],
+        properties: { payload: { type: 'string' } }
+    });
+};
+
+/**
+ * @description Get account info by state init
+ *
+ * @tags Connect
+ * @name GetAccountInfoByStateInit
+ * @request POST:/v2/tonconnect/stateinit
+ */
+export const getAccountInfoByStateInit = (
+    data: {
+        /** @format cell-base64 */
+        stateInit: Cell;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetAccountInfoByStateInitData, Error>({
+        path: `/v2/tonconnect/stateinit`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['stateInit'],
+            properties: { stateInit: { type: 'string', format: 'cell-base64' } }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAccountInfoByStateInitData>(req, {
+        $ref: '#/components/schemas/AccountInfoByStateInit'
+    });
+};
+
+/**
+ * @description Account verification and token issuance
+ *
+ * @tags Wallet
+ * @name TonConnectProof
+ * @request POST:/v2/wallet/auth/proof
+ */
+export const tonConnectProof = (
+    data: {
         /**
-         * @description Get the trace by trace ID or hash of any transaction in trace
-         *
-         * @tags Traces
-         * @name GetTrace
-         * @request GET:/v2/traces/{trace_id}
+         * @format address
+         * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
          */
-        getTrace: (traceId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetTraceData, Error>({
-                path: `/v2/traces/${traceId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetTraceData>(req, { $ref: '#/components/schemas/Trace' });
-        }
-    };
-    events = {
-        /**
-         * @description Get an event either by event ID or a hash of any transaction in a trace. An event is built on top of a trace which is a series of transactions caused by one inbound message. TonAPI looks for known patterns inside the trace and splits the trace into actions, where a single action represents a meaningful high-level operation like a Jetton Transfer or an NFT Purchase. Actions are expected to be shown to users. It is advised not to build any logic on top of actions because actions can be changed at any time.
-         *
-         * @tags Events
-         * @name GetEvent
-         * @request GET:/v2/events/{event_id}
-         */
-        getEvent: (eventId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetEventData, Error>({
-                path: `/v2/events/${eventId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetEventData>(req, { $ref: '#/components/schemas/Event' });
-        }
-    };
-    inscriptions = {
-        /**
-         * @description Get all inscriptions by owner address. It's experimental API and can be dropped in the future.
-         *
-         * @tags Inscriptions
-         * @name GetAccountInscriptions
-         * @request GET:/v2/experimental/accounts/{account_id}/inscriptions
-         */
-        getAccountInscriptions: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @default 1000
-                 */
-                limit?: number;
-                /**
-                 * @min 0
-                 * @default 0
-                 */
-                offset?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountInscriptionsData, Error>({
-                path: `/v2/experimental/accounts/${accountId}/inscriptions`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountInscriptionsData>(req, {
-                $ref: '#/components/schemas/InscriptionBalances'
-            });
-        },
-
-        /**
-         * @description Get the transfer inscriptions history for account. It's experimental API and can be dropped in the future.
-         *
-         * @tags Inscriptions
-         * @name GetAccountInscriptionsHistory
-         * @request GET:/v2/experimental/accounts/{account_id}/inscriptions/history
-         */
-        getAccountInscriptionsHistory: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @default 100
-                 * @example 100
-                 */
-                limit?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountInscriptionsHistoryData, Error>({
-                path: `/v2/experimental/accounts/${accountId}/inscriptions/history`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountInscriptionsHistoryData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
-        },
-
-        /**
-         * @description Get the transfer inscriptions history for account. It's experimental API and can be dropped in the future.
-         *
-         * @tags Inscriptions
-         * @name GetAccountInscriptionsHistoryByTicker
-         * @request GET:/v2/experimental/accounts/{account_id}/inscriptions/{ticker}/history
-         */
-        getAccountInscriptionsHistoryByTicker: (
-            accountId_Address: Address,
-            ticker: string,
-            query?: {
-                /**
-                 * omit this parameter to get last events
-                 * @format bigint
-                 * @example 25758317000002
-                 */
-                before_lt?: bigint;
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @default 100
-                 * @example 100
-                 */
-                limit?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountInscriptionsHistoryByTickerData, Error>({
-                path: `/v2/experimental/accounts/${accountId}/inscriptions/${ticker}/history`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountInscriptionsHistoryByTickerData>(req, {
-                $ref: '#/components/schemas/AccountEvents'
-            });
-        },
-
-        /**
-         * @description return comment for making operation with inscription. please don't use it if you don't know what you are doing
-         *
-         * @tags Inscriptions
-         * @name GetInscriptionOpTemplate
-         * @request GET:/v2/experimental/inscriptions/op-template
-         */
-        getInscriptionOpTemplate: (
-            query: {
-                /** @example "ton20" */
-                type: 'ton20' | 'gram20';
-                destination?: string;
-                comment?: string;
-                /** @example "transfer" */
-                operation: 'transfer';
-                /**
-                 * @format bigint
-                 * @example "1000000000"
-                 */
-                amount: bigint;
-                /** @example "nano" */
-                ticker: string;
-                /** @example "UQAs87W4yJHlF8mt29ocA4agnMrLsOP69jC1HPyBUjJay7Mg" */
-                who: string;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetInscriptionOpTemplateData, Error>({
-                path: `/v2/experimental/inscriptions/op-template`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetInscriptionOpTemplateData>(req, {
-                type: 'object',
-                required: ['comment', 'destination'],
-                properties: { comment: { type: 'string' }, destination: { type: 'string' } }
-            });
-        }
-    };
-    jettons = {
-        /**
-         * @description Get a list of all indexed jetton masters in the blockchain.
-         *
-         * @tags Jettons
-         * @name GetJettons
-         * @request GET:/v2/jettons
-         */
-        getJettons: (
-            query?: {
-                /**
-                 * @format int32
-                 * @min 1
-                 * @max 1000
-                 * @default 100
-                 * @example 15
-                 */
-                limit?: number;
-                /**
-                 * @format int32
-                 * @min 0
-                 * @default 0
-                 * @example 10
-                 */
-                offset?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetJettonsData, Error>({
-                path: `/v2/jettons`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetJettonsData>(req, { $ref: '#/components/schemas/Jettons' });
-        },
-
-        /**
-         * @description Get jetton metadata by jetton master address
-         *
-         * @tags Jettons
-         * @name GetJettonInfo
-         * @request GET:/v2/jettons/{account_id}
-         */
-        getJettonInfo: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetJettonInfoData, Error>({
-                path: `/v2/jettons/${accountId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetJettonInfoData>(req, {
-                $ref: '#/components/schemas/JettonInfo'
-            });
-        },
-
-        /**
-         * @description Get jetton metadata items by jetton master addresses
-         *
-         * @tags Jettons
-         * @name GetJettonInfosByAddresses
-         * @request POST:/v2/jettons/_bulk
-         */
-        getJettonInfosByAddresses: (
-            data: {
-                accountIds: Address[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetJettonInfosByAddressesData, Error>({
-                path: `/v2/jettons/_bulk`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['accountIds'],
-                    properties: {
-                        accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-                    }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetJettonInfosByAddressesData>(req, {
-                $ref: '#/components/schemas/Jettons'
-            });
-        },
-
-        /**
-         * @description Get jetton's holders
-         *
-         * @tags Jettons
-         * @name GetJettonHolders
-         * @request GET:/v2/jettons/{account_id}/holders
-         */
-        getJettonHolders: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * @min 1
-                 * @max 1000
-                 * @default 1000
-                 */
-                limit?: number;
-                /**
-                 * @min 0
-                 * @default 0
-                 */
-                offset?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetJettonHoldersData, Error>({
-                path: `/v2/jettons/${accountId}/holders`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetJettonHoldersData>(req, {
-                $ref: '#/components/schemas/JettonHolders'
-            });
-        },
-
-        /**
-         * @description Get jetton's custom payload and state init required for transfer
-         *
-         * @tags Jettons
-         * @name GetJettonTransferPayload
-         * @request GET:/v2/jettons/{jetton_id}/transfer/{account_id}/payload
-         */
-        getJettonTransferPayload: (
-            accountId_Address: Address,
-            jettonId_Address: Address,
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const jettonId = jettonId_Address.toRawString();
-            const req = this.http.request<GetJettonTransferPayloadData, Error>({
-                path: `/v2/jettons/${jettonId}/transfer/${accountId}/payload`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetJettonTransferPayloadData>(req, {
-                $ref: '#/components/schemas/JettonTransferPayload'
-            });
-        },
-
-        /**
-         * @description Get only jetton transfers in the event
-         *
-         * @tags Jettons
-         * @name GetJettonsEvents
-         * @request GET:/v2/events/{event_id}/jettons
-         */
-        getJettonsEvents: (eventId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetJettonsEventsData, Error>({
-                path: `/v2/events/${eventId}/jettons`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetJettonsEventsData>(req, {
-                $ref: '#/components/schemas/Event'
-            });
-        }
-    };
-    extraCurrency = {
-        /**
-         * @description Get extra currency info by id
-         *
-         * @tags ExtraCurrency
-         * @name GetExtraCurrencyInfo
-         * @request GET:/v2/extra-currency/{id}
-         */
-        getExtraCurrencyInfo: (id: number, params: RequestParams = {}) => {
-            const req = this.http.request<GetExtraCurrencyInfoData, Error>({
-                path: `/v2/extra-currency/${id}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetExtraCurrencyInfoData>(req, {
-                $ref: '#/components/schemas/EcPreview'
-            });
-        }
-    };
-    staking = {
-        /**
-         * @description All pools where account participates
-         *
-         * @tags Staking
-         * @name GetAccountNominatorsPools
-         * @request GET:/v2/staking/nominator/{account_id}/pools
-         */
-        getAccountNominatorsPools: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountNominatorsPoolsData, Error>({
-                path: `/v2/staking/nominator/${accountId}/pools`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountNominatorsPoolsData>(req, {
-                $ref: '#/components/schemas/AccountStaking'
-            });
-        },
-
-        /**
-         * @description Stacking pool info
-         *
-         * @tags Staking
-         * @name GetStakingPoolInfo
-         * @request GET:/v2/staking/pool/{account_id}
-         */
-        getStakingPoolInfo: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetStakingPoolInfoData, Error>({
-                path: `/v2/staking/pool/${accountId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetStakingPoolInfoData>(req, {
-                type: 'object',
-                required: ['implementation', 'pool'],
-                properties: {
-                    implementation: { $ref: '#/components/schemas/PoolImplementation' },
-                    pool: { $ref: '#/components/schemas/PoolInfo' }
-                }
-            });
-        },
-
-        /**
-         * @description Pool history
-         *
-         * @tags Staking
-         * @name GetStakingPoolHistory
-         * @request GET:/v2/staking/pool/{account_id}/history
-         */
-        getStakingPoolHistory: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetStakingPoolHistoryData, Error>({
-                path: `/v2/staking/pool/${accountId}/history`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetStakingPoolHistoryData>(req, {
-                type: 'object',
-                required: ['apy'],
-                properties: {
-                    apy: { type: 'array', items: { $ref: '#/components/schemas/ApyHistory' } }
-                }
-            });
-        },
-
-        /**
-         * @description All pools available in network
-         *
-         * @tags Staking
-         * @name GetStakingPools
-         * @request GET:/v2/staking/pools
-         */
-        getStakingPools: (
-            query?: {
-                /**
-                 * account ID
-                 * @format address
-                 * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
-                 */
-                available_for?: Address;
-                /**
-                 * return also pools not from white list - just compatible by interfaces (maybe dangerous!)
-                 * @example false
-                 */
-                include_unverified?: boolean;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetStakingPoolsData, Error>({
-                path: `/v2/staking/pools`,
-                method: 'GET',
-                query: query && {
-                    ...query,
-                    available_for: query.available_for?.toRawString()
-                },
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetStakingPoolsData>(req, {
-                type: 'object',
-                required: ['pools', 'implementations'],
-                properties: {
-                    pools: { type: 'array', items: { $ref: '#/components/schemas/PoolInfo' } },
-                    implementations: {
-                        type: 'object',
-                        additionalProperties: { $ref: '#/components/schemas/PoolImplementation' }
-                    }
-                }
-            });
-        }
-    };
-    storage = {
-        /**
-         * @description Get TON storage providers deployed to the blockchain.
-         *
-         * @tags Storage
-         * @name GetStorageProviders
-         * @request GET:/v2/storage/providers
-         */
-        getStorageProviders: (params: RequestParams = {}) => {
-            const req = this.http.request<GetStorageProvidersData, Error>({
-                path: `/v2/storage/providers`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetStorageProvidersData>(req, {
-                type: 'object',
-                required: ['providers'],
-                properties: {
-                    providers: {
-                        type: 'array',
-                        items: { $ref: '#/components/schemas/StorageProvider' }
-                    }
-                }
-            });
-        }
-    };
-    rates = {
-        /**
-         * @description Get the token price in the chosen currency for display only. Don’t use this for financial transactions.
-         *
-         * @tags Rates
-         * @name GetRates
-         * @request GET:/v2/rates
-         */
-        getRates: (
-            query: {
-                /**
-                 * accept ton and jetton master addresses, separated by commas
-                 * @maxItems 100
-                 * @example ["ton"]
-                 */
-                tokens: string[];
-                /**
-                 * accept ton and all possible fiat currencies, separated by commas
-                 * @maxItems 50
-                 * @example ["ton","usd","rub"]
-                 */
-                currencies: string[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetRatesData, Error>({
-                path: `/v2/rates`,
-                method: 'GET',
-                query: query,
-                queryImplode: ['tokens', 'currencies'],
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRatesData>(req, {
-                type: 'object',
-                required: ['rates'],
-                properties: {
-                    rates: {
-                        type: 'object',
-                        additionalProperties: { $ref: '#/components/schemas/TokenRates' }
-                    }
-                }
-            });
-        },
-
-        /**
-         * @description Get chart by token
-         *
-         * @tags Rates
-         * @name GetChartRates
-         * @request GET:/v2/rates/chart
-         */
-        getChartRates: (
-            query: {
-                /**
-                 * accept jetton master address
-                 * @format address
-                 */
-                token: Address;
-                /** @example "usd" */
-                currency?: string;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                start_date?: number;
-                /**
-                 * @format int64
-                 * @max 2114380800
-                 * @example 1668436763
-                 */
-                end_date?: number;
-                /**
-                 * @format int
-                 * @min 0
-                 * @max 200
-                 * @default 200
-                 */
-                points_count?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetChartRatesData, Error>({
-                path: `/v2/rates/chart`,
-                method: 'GET',
-                query: query && {
-                    ...query,
-                    token: query.token?.toRawString()
-                },
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetChartRatesData>(req, {
-                type: 'object',
-                required: ['points'],
-                properties: {
-                    points: { type: 'array', items: { $ref: '#/components/schemas/ChartPoints' } }
-                }
-            });
-        },
-
-        /**
-         * @description Get the TON price from markets
-         *
-         * @tags Rates
-         * @name GetMarketsRates
-         * @request GET:/v2/rates/markets
-         */
-        getMarketsRates: (params: RequestParams = {}) => {
-            const req = this.http.request<GetMarketsRatesData, Error>({
-                path: `/v2/rates/markets`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetMarketsRatesData>(req, {
-                type: 'object',
-                required: ['markets'],
-                properties: {
-                    markets: {
-                        type: 'array',
-                        items: { $ref: '#/components/schemas/MarketTonRates' }
-                    }
-                }
-            });
-        }
-    };
-    connect = {
-        /**
-         * @description Get a payload for further token receipt
-         *
-         * @tags Connect
-         * @name GetTonConnectPayload
-         * @request GET:/v2/tonconnect/payload
-         */
-        getTonConnectPayload: (params: RequestParams = {}) => {
-            const req = this.http.request<GetTonConnectPayloadData, Error>({
-                path: `/v2/tonconnect/payload`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetTonConnectPayloadData>(req, {
-                type: 'object',
-                required: ['payload'],
-                properties: { payload: { type: 'string' } }
-            });
-        },
-
-        /**
-         * @description Get account info by state init
-         *
-         * @tags Connect
-         * @name GetAccountInfoByStateInit
-         * @request POST:/v2/tonconnect/stateinit
-         */
-        getAccountInfoByStateInit: (
-            data: {
-                /** @format cell-base64 */
-                stateInit: Cell;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetAccountInfoByStateInitData, Error>({
-                path: `/v2/tonconnect/stateinit`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['stateInit'],
-                    properties: { stateInit: { type: 'string', format: 'cell-base64' } }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAccountInfoByStateInitData>(req, {
-                $ref: '#/components/schemas/AccountInfoByStateInit'
-            });
-        }
-    };
-    wallet = {
-        /**
-         * @description Account verification and token issuance
-         *
-         * @tags Wallet
-         * @name TonConnectProof
-         * @request POST:/v2/wallet/auth/proof
-         */
-        tonConnectProof: (
-            data: {
-                /**
-                 * @format address
-                 * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
-                 */
-                address: Address;
+        address: Address;
+        proof: {
+            /**
+             * @format int64
+             * @example "1678275313"
+             */
+            timestamp: number;
+            domain: {
+                /** @format int32 */
+                lengthBytes?: number;
+                value: string;
+            };
+            signature: string;
+            /** @example "84jHVNLQmZsAAAAAZB0Zryi2wqVJI-KaKNXOvCijEi46YyYzkaSHyJrMPBMOkVZa" */
+            payload: string;
+            /** @format cell-base64 */
+            stateInit?: Cell;
+        };
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<TonConnectProofData, Error>({
+        path: `/v2/wallet/auth/proof`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['address', 'proof'],
+            properties: {
+                address: { type: 'string', format: 'address' },
                 proof: {
-                    /**
-                     * @format int64
-                     * @example "1678275313"
-                     */
-                    timestamp: number;
-                    domain: {
-                        /** @format int32 */
-                        lengthBytes?: number;
-                        value: string;
-                    };
-                    signature: string;
-                    /** @example "84jHVNLQmZsAAAAAZB0Zryi2wqVJI-KaKNXOvCijEi46YyYzkaSHyJrMPBMOkVZa" */
-                    payload: string;
-                    /** @format cell-base64 */
-                    stateInit?: Cell;
-                };
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<TonConnectProofData, Error>({
-                path: `/v2/wallet/auth/proof`,
-                method: 'POST',
-                body: prepareRequestData(data, {
                     type: 'object',
-                    required: ['address', 'proof'],
+                    required: ['timestamp', 'domain', 'signature', 'payload'],
                     properties: {
-                        address: { type: 'string', format: 'address' },
-                        proof: {
+                        timestamp: { type: 'integer', format: 'int64' },
+                        domain: {
                             type: 'object',
-                            required: ['timestamp', 'domain', 'signature', 'payload'],
+                            required: ['value'],
                             properties: {
-                                timestamp: { type: 'integer', format: 'int64' },
-                                domain: {
-                                    type: 'object',
-                                    required: ['value'],
-                                    properties: {
-                                        lengthBytes: { type: 'integer', format: 'int32' },
-                                        value: { type: 'string' }
-                                    }
-                                },
-                                signature: { type: 'string' },
-                                payload: { type: 'string' },
-                                stateInit: { type: 'string', format: 'cell-base64' }
+                                lengthBytes: { type: 'integer', format: 'int32' },
+                                value: { type: 'string' }
                             }
-                        }
+                        },
+                        signature: { type: 'string' },
+                        payload: { type: 'string' },
+                        stateInit: { type: 'string', format: 'cell-base64' }
                     }
-                }),
-                format: 'json',
-                ...params
-            });
+                }
+            }
+        }),
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<TonConnectProofData>(req, {
-                type: 'object',
-                required: ['token'],
-                properties: { token: { type: 'string' } }
-            });
-        },
+    return prepareResponse<TonConnectProofData>(req, {
+        type: 'object',
+        required: ['token'],
+        properties: { token: { type: 'string' } }
+    });
+};
 
-        /**
-         * @description Get account seqno
-         *
-         * @tags Wallet
-         * @name GetAccountSeqno
-         * @request GET:/v2/wallet/{account_id}/seqno
-         */
-        getAccountSeqno: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetAccountSeqnoData, Error>({
-                path: `/v2/wallet/${accountId}/seqno`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+/**
+ * @description Get account seqno
+ *
+ * @tags Wallet
+ * @name GetAccountSeqno
+ * @request GET:/v2/wallet/{account_id}/seqno
+ */
+export const getAccountSeqno = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetAccountSeqnoData, Error>({
+        path: `/v2/wallet/${accountId}/seqno`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<GetAccountSeqnoData>(req, {
-                $ref: '#/components/schemas/Seqno'
-            });
-        },
+    return prepareResponse<GetAccountSeqnoData>(req, { $ref: '#/components/schemas/Seqno' });
+};
 
-        /**
-         * @description Get wallets by public key
-         *
-         * @tags Wallet
-         * @name GetWalletsByPublicKey
-         * @request GET:/v2/pubkeys/{public_key}/wallets
-         */
-        getWalletsByPublicKey: (publicKey: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetWalletsByPublicKeyData, Error>({
-                path: `/v2/pubkeys/${publicKey}/wallets`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+/**
+ * @description Get wallets by public key
+ *
+ * @tags Wallet
+ * @name GetWalletsByPublicKey
+ * @request GET:/v2/pubkeys/{public_key}/wallets
+ */
+export const getWalletsByPublicKey = (publicKey: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetWalletsByPublicKeyData, Error>({
+        path: `/v2/pubkeys/${publicKey}/wallets`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<GetWalletsByPublicKeyData>(req, {
-                $ref: '#/components/schemas/Accounts'
-            });
-        }
-    };
-    gasless = {
-        /**
-         * @description Returns configuration of gasless transfers
-         *
-         * @tags Gasless
-         * @name GaslessConfig
-         * @request GET:/v2/gasless/config
-         */
-        gaslessConfig: (params: RequestParams = {}) => {
-            const req = this.http.request<GaslessConfigData, Error>({
-                path: `/v2/gasless/config`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+    return prepareResponse<GetWalletsByPublicKeyData>(req, {
+        $ref: '#/components/schemas/Accounts'
+    });
+};
 
-            return prepareResponse<GaslessConfigData>(req, {
-                $ref: '#/components/schemas/GaslessConfig'
-            });
-        },
+/**
+ * @description Returns configuration of gasless transfers
+ *
+ * @tags Gasless
+ * @name GaslessConfig
+ * @request GET:/v2/gasless/config
+ */
+export const gaslessConfig = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GaslessConfigData, Error>({
+        path: `/v2/gasless/config`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
 
-        /**
-         * @description Estimates the cost of the given messages and returns a payload to sign
-         *
-         * @tags Gasless
-         * @name GaslessEstimate
-         * @request POST:/v2/gasless/estimate/{master_id}
-         */
-        gaslessEstimate: (
-            masterId_Address: Address,
-            data: {
-                /** @format address */
-                walletAddress: Address;
-                walletPublicKey: string;
+    return prepareResponse<GaslessConfigData>(req, { $ref: '#/components/schemas/GaslessConfig' });
+};
+
+/**
+ * @description Estimates the cost of the given messages and returns a payload to sign
+ *
+ * @tags Gasless
+ * @name GaslessEstimate
+ * @request POST:/v2/gasless/estimate/{master_id}
+ */
+export const gaslessEstimate = (
+    masterId_Address: Address,
+    data: {
+        /** @format address */
+        walletAddress: Address;
+        walletPublicKey: string;
+        messages: {
+            /** @format cell */
+            boc: Cell;
+        }[];
+    },
+    params: RequestParams = {}
+) => {
+    const masterId = masterId_Address.toRawString();
+    const req = getHttpClient().request<GaslessEstimateData, Error>({
+        path: `/v2/gasless/estimate/${masterId}`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['messages', 'walletAddress', 'walletPublicKey'],
+            properties: {
+                walletAddress: { type: 'string', format: 'address' },
+                walletPublicKey: { type: 'string' },
                 messages: {
-                    /** @format cell */
-                    boc: Cell;
-                }[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const masterId = masterId_Address.toRawString();
-            const req = this.http.request<GaslessEstimateData, Error>({
-                path: `/v2/gasless/estimate/${masterId}`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['messages', 'walletAddress', 'walletPublicKey'],
-                    properties: {
-                        walletAddress: { type: 'string', format: 'address' },
-                        walletPublicKey: { type: 'string' },
-                        messages: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                required: ['boc'],
-                                properties: { boc: { type: 'string', format: 'cell' } }
-                            }
-                        }
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['boc'],
+                        properties: { boc: { type: 'string', format: 'cell' } }
                     }
-                }),
-                format: 'json',
-                ...params
-            });
+                }
+            }
+        }),
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<GaslessEstimateData>(req, {
-                $ref: '#/components/schemas/SignRawParams'
-            });
-        },
+    return prepareResponse<GaslessEstimateData>(req, {
+        $ref: '#/components/schemas/SignRawParams'
+    });
+};
 
-        /**
-         * @description Submits the signed gasless transaction message to the network
-         *
-         * @tags Gasless
-         * @name GaslessSend
-         * @request POST:/v2/gasless/send
-         */
-        gaslessSend: (
-            data: {
-                /** hex encoded public key */
-                walletPublicKey: string;
-                /** @format cell */
-                boc: Cell;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GaslessSendData, Error>({
-                path: `/v2/gasless/send`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['boc', 'walletPublicKey'],
-                    properties: {
-                        walletPublicKey: { type: 'string' },
-                        boc: { type: 'string', format: 'cell' }
-                    }
-                }),
-                ...params
-            });
+/**
+ * @description Submits the signed gasless transaction message to the network
+ *
+ * @tags Gasless
+ * @name GaslessSend
+ * @request POST:/v2/gasless/send
+ */
+export const gaslessSend = (
+    data: {
+        /** hex encoded public key */
+        walletPublicKey: string;
+        /** @format cell */
+        boc: Cell;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GaslessSendData, Error>({
+        path: `/v2/gasless/send`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['boc', 'walletPublicKey'],
+            properties: {
+                walletPublicKey: { type: 'string' },
+                boc: { type: 'string', format: 'cell' }
+            }
+        }),
+        ...params
+    });
 
-            return prepareResponse<GaslessSendData>(req);
+    return prepareResponse<GaslessSendData>(req);
+};
+
+/**
+ * @description Get raw masterchain info
+ *
+ * @tags Lite Server
+ * @name GetRawMasterchainInfo
+ * @request GET:/v2/liteserver/get_masterchain_info
+ */
+export const getRawMasterchainInfo = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetRawMasterchainInfoData, Error>({
+        path: `/v2/liteserver/get_masterchain_info`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawMasterchainInfoData>(req, {
+        type: 'object',
+        required: ['last', 'state_root_hash', 'init'],
+        properties: {
+            last: { $ref: '#/components/schemas/BlockRaw' },
+            state_root_hash: { type: 'string' },
+            init: { $ref: '#/components/schemas/InitStateRaw' }
         }
-    };
-    liteServer = {
-        /**
-         * @description Get raw masterchain info
-         *
-         * @tags Lite Server
-         * @name GetRawMasterchainInfo
-         * @request GET:/v2/liteserver/get_masterchain_info
-         */
-        getRawMasterchainInfo: (params: RequestParams = {}) => {
-            const req = this.http.request<GetRawMasterchainInfoData, Error>({
-                path: `/v2/liteserver/get_masterchain_info`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+    });
+};
 
-            return prepareResponse<GetRawMasterchainInfoData>(req, {
-                type: 'object',
-                required: ['last', 'state_root_hash', 'init'],
-                properties: {
-                    last: { $ref: '#/components/schemas/BlockRaw' },
-                    state_root_hash: { type: 'string' },
-                    init: { $ref: '#/components/schemas/InitStateRaw' }
-                }
-            });
+/**
+ * @description Get raw masterchain info ext
+ *
+ * @tags Lite Server
+ * @name GetRawMasterchainInfoExt
+ * @request GET:/v2/liteserver/get_masterchain_info_ext
+ */
+export const getRawMasterchainInfoExt = (
+    query: {
+        /**
+         * mode
+         * @format int32
+         * @example 0
+         */
+        mode: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRawMasterchainInfoExtData, Error>({
+        path: `/v2/liteserver/get_masterchain_info_ext`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawMasterchainInfoExtData>(req, {
+        type: 'object',
+        required: [
+            'mode',
+            'version',
+            'capabilities',
+            'last',
+            'last_utime',
+            'now',
+            'state_root_hash',
+            'init'
+        ],
+        properties: {
+            mode: { type: 'integer', format: 'int32' },
+            version: { type: 'integer', format: 'int32' },
+            capabilities: { type: 'integer', format: 'int64' },
+            last: { $ref: '#/components/schemas/BlockRaw' },
+            last_utime: { type: 'integer', format: 'int32' },
+            now: { type: 'integer', format: 'int32' },
+            state_root_hash: { type: 'string' },
+            init: { $ref: '#/components/schemas/InitStateRaw' }
+        }
+    });
+};
+
+/**
+ * @description Get raw time
+ *
+ * @tags Lite Server
+ * @name GetRawTime
+ * @request GET:/v2/liteserver/get_time
+ */
+export const getRawTime = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetRawTimeData, Error>({
+        path: `/v2/liteserver/get_time`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawTimeData>(req, {
+        type: 'object',
+        required: ['time'],
+        properties: { time: { type: 'integer', format: 'int32' } }
+    });
+};
+
+/**
+ * @description Get raw blockchain block
+ *
+ * @tags Lite Server
+ * @name GetRawBlockchainBlock
+ * @request GET:/v2/liteserver/get_block/{block_id}
+ */
+export const getRawBlockchainBlock = (blockId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetRawBlockchainBlockData, Error>({
+        path: `/v2/liteserver/get_block/${blockId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawBlockchainBlockData>(req, {
+        type: 'object',
+        required: ['id', 'data'],
+        properties: { id: { $ref: '#/components/schemas/BlockRaw' }, data: { type: 'string' } }
+    });
+};
+
+/**
+ * @description Get raw blockchain block state
+ *
+ * @tags Lite Server
+ * @name GetRawBlockchainBlockState
+ * @request GET:/v2/liteserver/get_state/{block_id}
+ */
+export const getRawBlockchainBlockState = (blockId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetRawBlockchainBlockStateData, Error>({
+        path: `/v2/liteserver/get_state/${blockId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawBlockchainBlockStateData>(req, {
+        type: 'object',
+        required: ['id', 'root_hash', 'file_hash', 'data'],
+        properties: {
+            id: { $ref: '#/components/schemas/BlockRaw' },
+            root_hash: { type: 'string' },
+            file_hash: { type: 'string' },
+            data: { type: 'string' }
+        }
+    });
+};
+
+/**
+ * @description Get raw blockchain block header
+ *
+ * @tags Lite Server
+ * @name GetRawBlockchainBlockHeader
+ * @request GET:/v2/liteserver/get_block_header/{block_id}
+ */
+export const getRawBlockchainBlockHeader = (
+    blockId: string,
+    query: {
+        /**
+         * mode
+         * @format int32
+         * @example 0
+         */
+        mode: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRawBlockchainBlockHeaderData, Error>({
+        path: `/v2/liteserver/get_block_header/${blockId}`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawBlockchainBlockHeaderData>(req, {
+        type: 'object',
+        required: ['id', 'mode', 'header_proof'],
+        properties: {
+            id: { $ref: '#/components/schemas/BlockRaw' },
+            mode: { type: 'integer', format: 'int32' },
+            header_proof: { type: 'string' }
+        }
+    });
+};
+
+/**
+ * @description Send raw message to blockchain
+ *
+ * @tags Lite Server
+ * @name SendRawMessage
+ * @request POST:/v2/liteserver/send_message
+ */
+export const sendRawMessage = (
+    data: {
+        /** @format cell-base64 */
+        body: Cell;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<SendRawMessageData, Error>({
+        path: `/v2/liteserver/send_message`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['body'],
+            properties: { body: { type: 'string', format: 'cell-base64' } }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<SendRawMessageData>(req, {
+        type: 'object',
+        required: ['code'],
+        properties: { code: { type: 'integer', format: 'int32' } }
+    });
+};
+
+/**
+ * @description Get raw account state
+ *
+ * @tags Lite Server
+ * @name GetRawAccountState
+ * @request GET:/v2/liteserver/get_account_state/{account_id}
+ */
+export const getRawAccountState = (
+    accountId_Address: Address,
+    query?: {
+        /**
+         * target block: (workchain,shard,seqno,root_hash,file_hash)
+         * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
+         */
+        target_block?: string;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetRawAccountStateData, Error>({
+        path: `/v2/liteserver/get_account_state/${accountId}`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawAccountStateData>(req, {
+        type: 'object',
+        required: ['id', 'shardblk', 'shard_proof', 'proof', 'state'],
+        properties: {
+            id: { $ref: '#/components/schemas/BlockRaw' },
+            shardblk: { $ref: '#/components/schemas/BlockRaw' },
+            shard_proof: { type: 'string' },
+            proof: { type: 'string' },
+            state: { type: 'string' }
+        }
+    });
+};
+
+/**
+ * @description Get raw shard info
+ *
+ * @tags Lite Server
+ * @name GetRawShardInfo
+ * @request GET:/v2/liteserver/get_shard_info/{block_id}
+ */
+export const getRawShardInfo = (
+    blockId: string,
+    query: {
+        /**
+         * workchain
+         * @format int32
+         * @example 1
+         */
+        workchain: number;
+        /**
+         * shard
+         * @format int64
+         * @example 1
+         */
+        shard: number;
+        /**
+         * exact
+         * @example false
+         */
+        exact: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRawShardInfoData, Error>({
+        path: `/v2/liteserver/get_shard_info/${blockId}`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawShardInfoData>(req, {
+        type: 'object',
+        required: ['id', 'shardblk', 'shard_proof', 'shard_descr'],
+        properties: {
+            id: { $ref: '#/components/schemas/BlockRaw' },
+            shardblk: { $ref: '#/components/schemas/BlockRaw' },
+            shard_proof: { type: 'string' },
+            shard_descr: { type: 'string' }
+        }
+    });
+};
+
+/**
+ * @description Get all raw shards info
+ *
+ * @tags Lite Server
+ * @name GetAllRawShardsInfo
+ * @request GET:/v2/liteserver/get_all_shards_info/{block_id}
+ */
+export const getAllRawShardsInfo = (blockId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetAllRawShardsInfoData, Error>({
+        path: `/v2/liteserver/get_all_shards_info/${blockId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetAllRawShardsInfoData>(req, {
+        type: 'object',
+        required: ['id', 'proof', 'data'],
+        properties: {
+            id: { $ref: '#/components/schemas/BlockRaw' },
+            proof: { type: 'string' },
+            data: { type: 'string' }
+        }
+    });
+};
+
+/**
+ * @description Get raw transactions
+ *
+ * @tags Lite Server
+ * @name GetRawTransactions
+ * @request GET:/v2/liteserver/get_transactions/{account_id}
+ */
+export const getRawTransactions = (
+    accountId_Address: Address,
+    query: {
+        /**
+         * count
+         * @format int32
+         * @example 100
+         */
+        count: number;
+        /**
+         * lt
+         * @format int64
+         * @example 23814011000000
+         */
+        lt: number;
+        /**
+         * hash
+         * @example "131D0C65055F04E9C19D687B51BC70F952FD9CA6F02C2801D3B89964A779DF85"
+         */
+        hash: string;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetRawTransactionsData, Error>({
+        path: `/v2/liteserver/get_transactions/${accountId}`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawTransactionsData>(req, {
+        type: 'object',
+        required: ['ids', 'transactions'],
+        properties: {
+            ids: { type: 'array', items: { $ref: '#/components/schemas/BlockRaw' } },
+            transactions: { type: 'string' }
+        }
+    });
+};
+
+/**
+ * @description Get raw list block transactions
+ *
+ * @tags Lite Server
+ * @name GetRawListBlockTransactions
+ * @request GET:/v2/liteserver/list_block_transactions/{block_id}
+ */
+export const getRawListBlockTransactions = (
+    blockId: string,
+    query: {
+        /**
+         * mode
+         * @format int32
+         * @example 0
+         */
+        mode: number;
+        /**
+         * count
+         * @format int32
+         * @example 100
+         */
+        count: number;
+        /**
+         * account ID
+         * @format address
+         * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
+         */
+        account_id?: Address;
+        /**
+         * lt
+         * @format int64
+         * @example 23814011000000
+         */
+        lt?: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRawListBlockTransactionsData, Error>({
+        path: `/v2/liteserver/list_block_transactions/${blockId}`,
+        method: 'GET',
+        query: query && {
+            ...query,
+            account_id: query.account_id?.toRawString()
         },
+        queryImplode: ['account_id'],
+        format: 'json',
+        ...params
+    });
 
-        /**
-         * @description Get raw masterchain info ext
-         *
-         * @tags Lite Server
-         * @name GetRawMasterchainInfoExt
-         * @request GET:/v2/liteserver/get_masterchain_info_ext
-         */
-        getRawMasterchainInfoExt: (
-            query: {
-                /**
-                 * mode
-                 * @format int32
-                 * @example 0
-                 */
-                mode: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetRawMasterchainInfoExtData, Error>({
-                path: `/v2/liteserver/get_masterchain_info_ext`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawMasterchainInfoExtData>(req, {
-                type: 'object',
-                required: [
-                    'mode',
-                    'version',
-                    'capabilities',
-                    'last',
-                    'last_utime',
-                    'now',
-                    'state_root_hash',
-                    'init'
-                ],
-                properties: {
-                    mode: { type: 'integer', format: 'int32' },
-                    version: { type: 'integer', format: 'int32' },
-                    capabilities: { type: 'integer', format: 'int64' },
-                    last: { $ref: '#/components/schemas/BlockRaw' },
-                    last_utime: { type: 'integer', format: 'int32' },
-                    now: { type: 'integer', format: 'int32' },
-                    state_root_hash: { type: 'string' },
-                    init: { $ref: '#/components/schemas/InitStateRaw' }
-                }
-            });
-        },
-
-        /**
-         * @description Get raw time
-         *
-         * @tags Lite Server
-         * @name GetRawTime
-         * @request GET:/v2/liteserver/get_time
-         */
-        getRawTime: (params: RequestParams = {}) => {
-            const req = this.http.request<GetRawTimeData, Error>({
-                path: `/v2/liteserver/get_time`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawTimeData>(req, {
-                type: 'object',
-                required: ['time'],
-                properties: { time: { type: 'integer', format: 'int32' } }
-            });
-        },
-
-        /**
-         * @description Get raw blockchain block
-         *
-         * @tags Lite Server
-         * @name GetRawBlockchainBlock
-         * @request GET:/v2/liteserver/get_block/{block_id}
-         */
-        getRawBlockchainBlock: (blockId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetRawBlockchainBlockData, Error>({
-                path: `/v2/liteserver/get_block/${blockId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawBlockchainBlockData>(req, {
-                type: 'object',
-                required: ['id', 'data'],
-                properties: {
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    data: { type: 'string' }
-                }
-            });
-        },
-
-        /**
-         * @description Get raw blockchain block state
-         *
-         * @tags Lite Server
-         * @name GetRawBlockchainBlockState
-         * @request GET:/v2/liteserver/get_state/{block_id}
-         */
-        getRawBlockchainBlockState: (blockId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetRawBlockchainBlockStateData, Error>({
-                path: `/v2/liteserver/get_state/${blockId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawBlockchainBlockStateData>(req, {
-                type: 'object',
-                required: ['id', 'root_hash', 'file_hash', 'data'],
-                properties: {
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    root_hash: { type: 'string' },
-                    file_hash: { type: 'string' },
-                    data: { type: 'string' }
-                }
-            });
-        },
-
-        /**
-         * @description Get raw blockchain block header
-         *
-         * @tags Lite Server
-         * @name GetRawBlockchainBlockHeader
-         * @request GET:/v2/liteserver/get_block_header/{block_id}
-         */
-        getRawBlockchainBlockHeader: (
-            blockId: string,
-            query: {
-                /**
-                 * mode
-                 * @format int32
-                 * @example 0
-                 */
-                mode: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetRawBlockchainBlockHeaderData, Error>({
-                path: `/v2/liteserver/get_block_header/${blockId}`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawBlockchainBlockHeaderData>(req, {
-                type: 'object',
-                required: ['id', 'mode', 'header_proof'],
-                properties: {
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    mode: { type: 'integer', format: 'int32' },
-                    header_proof: { type: 'string' }
-                }
-            });
-        },
-
-        /**
-         * @description Send raw message to blockchain
-         *
-         * @tags Lite Server
-         * @name SendRawMessage
-         * @request POST:/v2/liteserver/send_message
-         */
-        sendRawMessage: (
-            data: {
-                /** @format cell-base64 */
-                body: Cell;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<SendRawMessageData, Error>({
-                path: `/v2/liteserver/send_message`,
-                method: 'POST',
-                body: prepareRequestData(data, {
+    return prepareResponse<GetRawListBlockTransactionsData>(req, {
+        type: 'object',
+        required: ['id', 'req_count', 'incomplete', 'ids', 'proof'],
+        properties: {
+            id: { $ref: '#/components/schemas/BlockRaw' },
+            req_count: { type: 'integer', format: 'int32' },
+            incomplete: { type: 'boolean' },
+            ids: {
+                type: 'array',
+                items: {
                     type: 'object',
-                    required: ['body'],
-                    properties: { body: { type: 'string', format: 'cell-base64' } }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<SendRawMessageData>(req, {
-                type: 'object',
-                required: ['code'],
-                properties: { code: { type: 'integer', format: 'int32' } }
-            });
-        },
-
-        /**
-         * @description Get raw account state
-         *
-         * @tags Lite Server
-         * @name GetRawAccountState
-         * @request GET:/v2/liteserver/get_account_state/{account_id}
-         */
-        getRawAccountState: (
-            accountId_Address: Address,
-            query?: {
-                /**
-                 * target block: (workchain,shard,seqno,root_hash,file_hash)
-                 * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
-                 */
-                target_block?: string;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetRawAccountStateData, Error>({
-                path: `/v2/liteserver/get_account_state/${accountId}`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawAccountStateData>(req, {
-                type: 'object',
-                required: ['id', 'shardblk', 'shard_proof', 'proof', 'state'],
-                properties: {
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    shardblk: { $ref: '#/components/schemas/BlockRaw' },
-                    shard_proof: { type: 'string' },
-                    proof: { type: 'string' },
-                    state: { type: 'string' }
+                    required: ['mode'],
+                    properties: {
+                        mode: { type: 'integer', format: 'int32' },
+                        account: { type: 'string' },
+                        lt: { type: 'integer', format: 'bigint', 'x-js-format': 'bigint' },
+                        hash: { type: 'string' }
+                    }
                 }
-            });
-        },
-
-        /**
-         * @description Get raw shard info
-         *
-         * @tags Lite Server
-         * @name GetRawShardInfo
-         * @request GET:/v2/liteserver/get_shard_info/{block_id}
-         */
-        getRawShardInfo: (
-            blockId: string,
-            query: {
-                /**
-                 * workchain
-                 * @format int32
-                 * @example 1
-                 */
-                workchain: number;
-                /**
-                 * shard
-                 * @format int64
-                 * @example 1
-                 */
-                shard: number;
-                /**
-                 * exact
-                 * @example false
-                 */
-                exact: boolean;
             },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetRawShardInfoData, Error>({
-                path: `/v2/liteserver/get_shard_info/${blockId}`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
+            proof: { type: 'string' }
+        }
+    });
+};
 
-            return prepareResponse<GetRawShardInfoData>(req, {
-                type: 'object',
-                required: ['id', 'shardblk', 'shard_proof', 'shard_descr'],
-                properties: {
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    shardblk: { $ref: '#/components/schemas/BlockRaw' },
-                    shard_proof: { type: 'string' },
-                    shard_descr: { type: 'string' }
-                }
-            });
-        },
-
+/**
+ * @description Get raw block proof
+ *
+ * @tags Lite Server
+ * @name GetRawBlockProof
+ * @request GET:/v2/liteserver/get_block_proof
+ */
+export const getRawBlockProof = (
+    query: {
         /**
-         * @description Get all raw shards info
-         *
-         * @tags Lite Server
-         * @name GetAllRawShardsInfo
-         * @request GET:/v2/liteserver/get_all_shards_info/{block_id}
+         * known block: (workchain,shard,seqno,root_hash,file_hash)
+         * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
          */
-        getAllRawShardsInfo: (blockId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetAllRawShardsInfoData, Error>({
-                path: `/v2/liteserver/get_all_shards_info/${blockId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetAllRawShardsInfoData>(req, {
-                type: 'object',
-                required: ['id', 'proof', 'data'],
-                properties: {
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    proof: { type: 'string' },
-                    data: { type: 'string' }
-                }
-            });
-        },
-
+        known_block: string;
         /**
-         * @description Get raw transactions
-         *
-         * @tags Lite Server
-         * @name GetRawTransactions
-         * @request GET:/v2/liteserver/get_transactions/{account_id}
+         * target block: (workchain,shard,seqno,root_hash,file_hash)
+         * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
          */
-        getRawTransactions: (
-            accountId_Address: Address,
-            query: {
-                /**
-                 * count
-                 * @format int32
-                 * @example 100
-                 */
-                count: number;
-                /**
-                 * lt
-                 * @format int64
-                 * @example 23814011000000
-                 */
-                lt: number;
-                /**
-                 * hash
-                 * @example "131D0C65055F04E9C19D687B51BC70F952FD9CA6F02C2801D3B89964A779DF85"
-                 */
-                hash: string;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetRawTransactionsData, Error>({
-                path: `/v2/liteserver/get_transactions/${accountId}`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawTransactionsData>(req, {
-                type: 'object',
-                required: ['ids', 'transactions'],
-                properties: {
-                    ids: { type: 'array', items: { $ref: '#/components/schemas/BlockRaw' } },
-                    transactions: { type: 'string' }
-                }
-            });
-        },
-
+        target_block?: string;
         /**
-         * @description Get raw list block transactions
-         *
-         * @tags Lite Server
-         * @name GetRawListBlockTransactions
-         * @request GET:/v2/liteserver/list_block_transactions/{block_id}
+         * mode
+         * @format int32
+         * @example 0
          */
-        getRawListBlockTransactions: (
-            blockId: string,
-            query: {
-                /**
-                 * mode
-                 * @format int32
-                 * @example 0
-                 */
-                mode: number;
-                /**
-                 * count
-                 * @format int32
-                 * @example 100
-                 */
-                count: number;
-                /**
-                 * account ID
-                 * @format address
-                 * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
-                 */
-                account_id?: Address;
-                /**
-                 * lt
-                 * @format int64
-                 * @example 23814011000000
-                 */
-                lt?: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetRawListBlockTransactionsData, Error>({
-                path: `/v2/liteserver/list_block_transactions/${blockId}`,
-                method: 'GET',
-                query: query && {
-                    ...query,
-                    account_id: query.account_id?.toRawString()
-                },
-                queryImplode: ['account_id'],
-                format: 'json',
-                ...params
-            });
+        mode: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRawBlockProofData, Error>({
+        path: `/v2/liteserver/get_block_proof`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<GetRawListBlockTransactionsData>(req, {
-                type: 'object',
-                required: ['id', 'req_count', 'incomplete', 'ids', 'proof'],
-                properties: {
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    req_count: { type: 'integer', format: 'int32' },
-                    incomplete: { type: 'boolean' },
-                    ids: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            required: ['mode'],
-                            properties: {
-                                mode: { type: 'integer', format: 'int32' },
-                                account: { type: 'string' },
-                                lt: { type: 'integer', format: 'bigint', 'x-js-format': 'bigint' },
-                                hash: { type: 'string' }
-                            }
-                        }
-                    },
-                    proof: { type: 'string' }
-                }
-            });
-        },
-
-        /**
-         * @description Get raw block proof
-         *
-         * @tags Lite Server
-         * @name GetRawBlockProof
-         * @request GET:/v2/liteserver/get_block_proof
-         */
-        getRawBlockProof: (
-            query: {
-                /**
-                 * known block: (workchain,shard,seqno,root_hash,file_hash)
-                 * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
-                 */
-                known_block: string;
-                /**
-                 * target block: (workchain,shard,seqno,root_hash,file_hash)
-                 * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
-                 */
-                target_block?: string;
-                /**
-                 * mode
-                 * @format int32
-                 * @example 0
-                 */
-                mode: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetRawBlockProofData, Error>({
-                path: `/v2/liteserver/get_block_proof`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawBlockProofData>(req, {
-                type: 'object',
-                required: ['complete', 'from', 'to', 'steps'],
-                properties: {
-                    complete: { type: 'boolean' },
-                    from: { $ref: '#/components/schemas/BlockRaw' },
-                    to: { $ref: '#/components/schemas/BlockRaw' },
-                    steps: {
-                        type: 'array',
-                        items: {
+    return prepareResponse<GetRawBlockProofData>(req, {
+        type: 'object',
+        required: ['complete', 'from', 'to', 'steps'],
+        properties: {
+            complete: { type: 'boolean' },
+            from: { $ref: '#/components/schemas/BlockRaw' },
+            to: { $ref: '#/components/schemas/BlockRaw' },
+            steps: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    required: ['lite_server_block_link_back', 'lite_server_block_link_forward'],
+                    properties: {
+                        lite_server_block_link_back: {
                             type: 'object',
                             required: [
-                                'lite_server_block_link_back',
-                                'lite_server_block_link_forward'
+                                'to_key_block',
+                                'from',
+                                'to',
+                                'dest_proof',
+                                'proof',
+                                'state_proof'
                             ],
                             properties: {
-                                lite_server_block_link_back: {
+                                to_key_block: { type: 'boolean' },
+                                from: { $ref: '#/components/schemas/BlockRaw' },
+                                to: { $ref: '#/components/schemas/BlockRaw' },
+                                dest_proof: { type: 'string' },
+                                proof: { type: 'string' },
+                                state_proof: { type: 'string' }
+                            }
+                        },
+                        lite_server_block_link_forward: {
+                            type: 'object',
+                            required: [
+                                'to_key_block',
+                                'from',
+                                'to',
+                                'dest_proof',
+                                'config_proof',
+                                'signatures'
+                            ],
+                            properties: {
+                                to_key_block: { type: 'boolean' },
+                                from: { $ref: '#/components/schemas/BlockRaw' },
+                                to: { $ref: '#/components/schemas/BlockRaw' },
+                                dest_proof: { type: 'string' },
+                                config_proof: { type: 'string' },
+                                signatures: {
                                     type: 'object',
                                     required: [
-                                        'to_key_block',
-                                        'from',
-                                        'to',
-                                        'dest_proof',
-                                        'proof',
-                                        'state_proof'
-                                    ],
-                                    properties: {
-                                        to_key_block: { type: 'boolean' },
-                                        from: { $ref: '#/components/schemas/BlockRaw' },
-                                        to: { $ref: '#/components/schemas/BlockRaw' },
-                                        dest_proof: { type: 'string' },
-                                        proof: { type: 'string' },
-                                        state_proof: { type: 'string' }
-                                    }
-                                },
-                                lite_server_block_link_forward: {
-                                    type: 'object',
-                                    required: [
-                                        'to_key_block',
-                                        'from',
-                                        'to',
-                                        'dest_proof',
-                                        'config_proof',
+                                        'validator_set_hash',
+                                        'catchain_seqno',
                                         'signatures'
                                     ],
                                     properties: {
-                                        to_key_block: { type: 'boolean' },
-                                        from: { $ref: '#/components/schemas/BlockRaw' },
-                                        to: { $ref: '#/components/schemas/BlockRaw' },
-                                        dest_proof: { type: 'string' },
-                                        config_proof: { type: 'string' },
+                                        validator_set_hash: { type: 'integer', format: 'int64' },
+                                        catchain_seqno: { type: 'integer', format: 'int32' },
                                         signatures: {
-                                            type: 'object',
-                                            required: [
-                                                'validator_set_hash',
-                                                'catchain_seqno',
-                                                'signatures'
-                                            ],
-                                            properties: {
-                                                validator_set_hash: {
-                                                    type: 'integer',
-                                                    format: 'int64'
-                                                },
-                                                catchain_seqno: {
-                                                    type: 'integer',
-                                                    format: 'int32'
-                                                },
-                                                signatures: {
-                                                    type: 'array',
-                                                    items: {
-                                                        type: 'object',
-                                                        required: ['node_id_short', 'signature'],
-                                                        properties: {
-                                                            node_id_short: { type: 'string' },
-                                                            signature: { type: 'string' }
-                                                        }
-                                                    }
+                                            type: 'array',
+                                            items: {
+                                                type: 'object',
+                                                required: ['node_id_short', 'signature'],
+                                                properties: {
+                                                    node_id_short: { type: 'string' },
+                                                    signature: { type: 'string' }
                                                 }
                                             }
                                         }
@@ -9283,338 +9230,324 @@ export class TonApiClient {
                         }
                     }
                 }
-            });
-        },
-
-        /**
-         * @description Get raw config
-         *
-         * @tags Lite Server
-         * @name GetRawConfig
-         * @request GET:/v2/liteserver/get_config_all/{block_id}
-         */
-        getRawConfig: (
-            blockId: string,
-            query: {
-                /**
-                 * mode
-                 * @format int32
-                 * @example 0
-                 */
-                mode: number;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<GetRawConfigData, Error>({
-                path: `/v2/liteserver/get_config_all/${blockId}`,
-                method: 'GET',
-                query: query,
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawConfigData>(req, {
-                type: 'object',
-                required: ['mode', 'id', 'state_proof', 'config_proof'],
-                properties: {
-                    mode: { type: 'integer', format: 'int32' },
-                    id: { $ref: '#/components/schemas/BlockRaw' },
-                    state_proof: { type: 'string' },
-                    config_proof: { type: 'string' }
-                }
-            });
-        },
-
-        /**
-         * @description Get raw shard block proof
-         *
-         * @tags Lite Server
-         * @name GetRawShardBlockProof
-         * @request GET:/v2/liteserver/get_shard_block_proof/{block_id}
-         */
-        getRawShardBlockProof: (blockId: string, params: RequestParams = {}) => {
-            const req = this.http.request<GetRawShardBlockProofData, Error>({
-                path: `/v2/liteserver/get_shard_block_proof/${blockId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetRawShardBlockProofData>(req, {
-                type: 'object',
-                required: ['masterchain_id', 'links'],
-                properties: {
-                    masterchain_id: { $ref: '#/components/schemas/BlockRaw' },
-                    links: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            required: ['id', 'proof'],
-                            properties: {
-                                id: { $ref: '#/components/schemas/BlockRaw' },
-                                proof: { type: 'string' }
-                            }
-                        }
-                    }
-                }
-            });
-        },
-
-        /**
-         * @description Get out msg queue sizes
-         *
-         * @tags Lite Server
-         * @name GetOutMsgQueueSizes
-         * @request GET:/v2/liteserver/get_out_msg_queue_sizes
-         */
-        getOutMsgQueueSizes: (params: RequestParams = {}) => {
-            const req = this.http.request<GetOutMsgQueueSizesData, Error>({
-                path: `/v2/liteserver/get_out_msg_queue_sizes`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<GetOutMsgQueueSizesData>(req, {
-                type: 'object',
-                required: ['ext_msg_queue_size_limit', 'shards'],
-                properties: {
-                    ext_msg_queue_size_limit: { type: 'integer', format: 'uint32' },
-                    shards: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            required: ['id', 'size'],
-                            properties: {
-                                id: { $ref: '#/components/schemas/BlockRaw' },
-                                size: { type: 'integer', format: 'uint32' }
-                            }
-                        }
-                    }
-                }
-            });
+            }
         }
-    };
-    multisig = {
-        /**
-         * @description Get multisig account info
-         *
-         * @tags Multisig
-         * @name GetMultisigAccount
-         * @request GET:/v2/multisig/{account_id}
-         */
-        getMultisigAccount: (accountId_Address: Address, params: RequestParams = {}) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<GetMultisigAccountData, Error>({
-                path: `/v2/multisig/${accountId}`,
-                method: 'GET',
-                format: 'json',
-                ...params
-            });
+    });
+};
 
-            return prepareResponse<GetMultisigAccountData>(req, {
-                $ref: '#/components/schemas/Multisig'
-            });
+/**
+ * @description Get raw config
+ *
+ * @tags Lite Server
+ * @name GetRawConfig
+ * @request GET:/v2/liteserver/get_config_all/{block_id}
+ */
+export const getRawConfig = (
+    blockId: string,
+    query: {
+        /**
+         * mode
+         * @format int32
+         * @example 0
+         */
+        mode: number;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<GetRawConfigData, Error>({
+        path: `/v2/liteserver/get_config_all/${blockId}`,
+        method: 'GET',
+        query: query,
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawConfigData>(req, {
+        type: 'object',
+        required: ['mode', 'id', 'state_proof', 'config_proof'],
+        properties: {
+            mode: { type: 'integer', format: 'int32' },
+            id: { $ref: '#/components/schemas/BlockRaw' },
+            state_proof: { type: 'string' },
+            config_proof: { type: 'string' }
         }
-    };
-    emulation = {
-        /**
-         * @description Decode a given message. Only external incoming messages can be decoded currently.
-         *
-         * @tags Emulation
-         * @name DecodeMessage
-         * @request POST:/v2/message/decode
-         */
-        decodeMessage: (
-            data: {
-                /** @format cell */
-                boc: Cell;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<DecodeMessageData, Error>({
-                path: `/v2/message/decode`,
-                method: 'POST',
-                body: prepareRequestData(data, {
+    });
+};
+
+/**
+ * @description Get raw shard block proof
+ *
+ * @tags Lite Server
+ * @name GetRawShardBlockProof
+ * @request GET:/v2/liteserver/get_shard_block_proof/{block_id}
+ */
+export const getRawShardBlockProof = (blockId: string, params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetRawShardBlockProofData, Error>({
+        path: `/v2/liteserver/get_shard_block_proof/${blockId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetRawShardBlockProofData>(req, {
+        type: 'object',
+        required: ['masterchain_id', 'links'],
+        properties: {
+            masterchain_id: { $ref: '#/components/schemas/BlockRaw' },
+            links: {
+                type: 'array',
+                items: {
                     type: 'object',
-                    required: ['boc'],
-                    properties: { boc: { type: 'string', format: 'cell' } }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<DecodeMessageData>(req, {
-                $ref: '#/components/schemas/DecodedMessage'
-            });
-        },
-
-        /**
-         * @description Emulate sending message to blockchain
-         *
-         * @tags Emulation, Events
-         * @name EmulateMessageToEvent
-         * @request POST:/v2/events/emulate
-         */
-        emulateMessageToEvent: (
-            data: {
-                /** @format cell */
-                boc: Cell;
-            },
-            query?: {
-                ignore_signature_check?: boolean;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<EmulateMessageToEventData, Error>({
-                path: `/v2/events/emulate`,
-                method: 'POST',
-                query: query,
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['boc'],
-                    properties: { boc: { type: 'string', format: 'cell' } }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<EmulateMessageToEventData>(req, {
-                $ref: '#/components/schemas/Event'
-            });
-        },
-
-        /**
-         * @description Emulate sending message to blockchain
-         *
-         * @tags Emulation, Traces
-         * @name EmulateMessageToTrace
-         * @request POST:/v2/traces/emulate
-         */
-        emulateMessageToTrace: (
-            data: {
-                /** @format cell */
-                boc: Cell;
-            },
-            query?: {
-                ignore_signature_check?: boolean;
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<EmulateMessageToTraceData, Error>({
-                path: `/v2/traces/emulate`,
-                method: 'POST',
-                query: query,
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['boc'],
-                    properties: { boc: { type: 'string', format: 'cell' } }
-                }),
-                format: 'json',
-                ...params
-            });
-
-            return prepareResponse<EmulateMessageToTraceData>(req, {
-                $ref: '#/components/schemas/Trace'
-            });
-        },
-
-        /**
-         * @description Emulate sending message to blockchain
-         *
-         * @tags Emulation, Wallet
-         * @name EmulateMessageToWallet
-         * @request POST:/v2/wallet/emulate
-         */
-        emulateMessageToWallet: (
-            data: {
-                /** @format cell */
-                boc: Cell;
-                /** additional per account configuration */
-                params?: {
-                    /**
-                     * @format address
-                     * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
-                     */
-                    address: Address;
-                    /**
-                     * @format bigint
-                     * @example 10000000000
-                     */
-                    balance?: bigint;
-                }[];
-            },
-            params: RequestParams = {}
-        ) => {
-            const req = this.http.request<EmulateMessageToWalletData, Error>({
-                path: `/v2/wallet/emulate`,
-                method: 'POST',
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['boc'],
+                    required: ['id', 'proof'],
                     properties: {
-                        boc: { type: 'string', format: 'cell' },
-                        params: {
-                            type: 'array',
-                            items: {
-                                type: 'object',
-                                required: ['address'],
-                                properties: {
-                                    address: { type: 'string', format: 'address' },
-                                    balance: {
-                                        type: 'integer',
-                                        format: 'bigint',
-                                        'x-js-format': 'bigint'
-                                    }
-                                }
-                            }
+                        id: { $ref: '#/components/schemas/BlockRaw' },
+                        proof: { type: 'string' }
+                    }
+                }
+            }
+        }
+    });
+};
+
+/**
+ * @description Get out msg queue sizes
+ *
+ * @tags Lite Server
+ * @name GetOutMsgQueueSizes
+ * @request GET:/v2/liteserver/get_out_msg_queue_sizes
+ */
+export const getOutMsgQueueSizes = (params: RequestParams = {}) => {
+    const req = getHttpClient().request<GetOutMsgQueueSizesData, Error>({
+        path: `/v2/liteserver/get_out_msg_queue_sizes`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetOutMsgQueueSizesData>(req, {
+        type: 'object',
+        required: ['ext_msg_queue_size_limit', 'shards'],
+        properties: {
+            ext_msg_queue_size_limit: { type: 'integer', format: 'uint32' },
+            shards: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    required: ['id', 'size'],
+                    properties: {
+                        id: { $ref: '#/components/schemas/BlockRaw' },
+                        size: { type: 'integer', format: 'uint32' }
+                    }
+                }
+            }
+        }
+    });
+};
+
+/**
+ * @description Get multisig account info
+ *
+ * @tags Multisig
+ * @name GetMultisigAccount
+ * @request GET:/v2/multisig/{account_id}
+ */
+export const getMultisigAccount = (accountId_Address: Address, params: RequestParams = {}) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<GetMultisigAccountData, Error>({
+        path: `/v2/multisig/${accountId}`,
+        method: 'GET',
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<GetMultisigAccountData>(req, { $ref: '#/components/schemas/Multisig' });
+};
+
+/**
+ * @description Decode a given message. Only external incoming messages can be decoded currently.
+ *
+ * @tags Emulation
+ * @name DecodeMessage
+ * @request POST:/v2/message/decode
+ */
+export const decodeMessage = (
+    data: {
+        /** @format cell */
+        boc: Cell;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<DecodeMessageData, Error>({
+        path: `/v2/message/decode`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['boc'],
+            properties: { boc: { type: 'string', format: 'cell' } }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<DecodeMessageData>(req, { $ref: '#/components/schemas/DecodedMessage' });
+};
+
+/**
+ * @description Emulate sending message to blockchain
+ *
+ * @tags Emulation, Events
+ * @name EmulateMessageToEvent
+ * @request POST:/v2/events/emulate
+ */
+export const emulateMessageToEvent = (
+    data: {
+        /** @format cell */
+        boc: Cell;
+    },
+    query?: {
+        ignore_signature_check?: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<EmulateMessageToEventData, Error>({
+        path: `/v2/events/emulate`,
+        method: 'POST',
+        query: query,
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['boc'],
+            properties: { boc: { type: 'string', format: 'cell' } }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<EmulateMessageToEventData>(req, { $ref: '#/components/schemas/Event' });
+};
+
+/**
+ * @description Emulate sending message to blockchain
+ *
+ * @tags Emulation, Traces
+ * @name EmulateMessageToTrace
+ * @request POST:/v2/traces/emulate
+ */
+export const emulateMessageToTrace = (
+    data: {
+        /** @format cell */
+        boc: Cell;
+    },
+    query?: {
+        ignore_signature_check?: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<EmulateMessageToTraceData, Error>({
+        path: `/v2/traces/emulate`,
+        method: 'POST',
+        query: query,
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['boc'],
+            properties: { boc: { type: 'string', format: 'cell' } }
+        }),
+        format: 'json',
+        ...params
+    });
+
+    return prepareResponse<EmulateMessageToTraceData>(req, { $ref: '#/components/schemas/Trace' });
+};
+
+/**
+ * @description Emulate sending message to blockchain
+ *
+ * @tags Emulation, Wallet
+ * @name EmulateMessageToWallet
+ * @request POST:/v2/wallet/emulate
+ */
+export const emulateMessageToWallet = (
+    data: {
+        /** @format cell */
+        boc: Cell;
+        /** additional per account configuration */
+        params?: {
+            /**
+             * @format address
+             * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
+             */
+            address: Address;
+            /**
+             * @format bigint
+             * @example 10000000000
+             */
+            balance?: bigint;
+        }[];
+    },
+    params: RequestParams = {}
+) => {
+    const req = getHttpClient().request<EmulateMessageToWalletData, Error>({
+        path: `/v2/wallet/emulate`,
+        method: 'POST',
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['boc'],
+            properties: {
+                boc: { type: 'string', format: 'cell' },
+                params: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['address'],
+                        properties: {
+                            address: { type: 'string', format: 'address' },
+                            balance: { type: 'integer', format: 'bigint', 'x-js-format': 'bigint' }
                         }
                     }
-                }),
-                format: 'json',
-                ...params
-            });
+                }
+            }
+        }),
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<EmulateMessageToWalletData>(req, {
-                $ref: '#/components/schemas/MessageConsequences'
-            });
-        },
+    return prepareResponse<EmulateMessageToWalletData>(req, {
+        $ref: '#/components/schemas/MessageConsequences'
+    });
+};
 
-        /**
-         * @description Emulate sending message to blockchain
-         *
-         * @tags Emulation, Accounts
-         * @name EmulateMessageToAccountEvent
-         * @request POST:/v2/accounts/{account_id}/events/emulate
-         */
-        emulateMessageToAccountEvent: (
-            accountId_Address: Address,
-            data: {
-                /** @format cell */
-                boc: Cell;
-            },
-            query?: {
-                ignore_signature_check?: boolean;
-            },
-            params: RequestParams = {}
-        ) => {
-            const accountId = accountId_Address.toRawString();
-            const req = this.http.request<EmulateMessageToAccountEventData, Error>({
-                path: `/v2/accounts/${accountId}/events/emulate`,
-                method: 'POST',
-                query: query,
-                body: prepareRequestData(data, {
-                    type: 'object',
-                    required: ['boc'],
-                    properties: { boc: { type: 'string', format: 'cell' } }
-                }),
-                format: 'json',
-                ...params
-            });
+/**
+ * @description Emulate sending message to blockchain
+ *
+ * @tags Emulation, Accounts
+ * @name EmulateMessageToAccountEvent
+ * @request POST:/v2/accounts/{account_id}/events/emulate
+ */
+export const emulateMessageToAccountEvent = (
+    accountId_Address: Address,
+    data: {
+        /** @format cell */
+        boc: Cell;
+    },
+    query?: {
+        ignore_signature_check?: boolean;
+    },
+    params: RequestParams = {}
+) => {
+    const accountId = accountId_Address.toRawString();
+    const req = getHttpClient().request<EmulateMessageToAccountEventData, Error>({
+        path: `/v2/accounts/${accountId}/events/emulate`,
+        method: 'POST',
+        query: query,
+        body: prepareRequestData(data, {
+            type: 'object',
+            required: ['boc'],
+            properties: { boc: { type: 'string', format: 'cell' } }
+        }),
+        format: 'json',
+        ...params
+    });
 
-            return prepareResponse<EmulateMessageToAccountEventData>(req, {
-                $ref: '#/components/schemas/AccountEvent'
-            });
-        }
-    };
-}
+    return prepareResponse<EmulateMessageToAccountEventData>(req, {
+        $ref: '#/components/schemas/AccountEvent'
+    });
+};

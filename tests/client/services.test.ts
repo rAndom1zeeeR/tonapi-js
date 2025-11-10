@@ -1,8 +1,13 @@
 import { Address } from '@ton/core';
-import { ta } from './utils/client';
+import { getChartRates as getChartRatesOp, getRates as getRatesOp } from '@ton-api/client';
+import { initTa } from './utils/client';
 import { getChartRates, getRates } from './__mock__/services';
 import { mockFetch } from './utils/mockFetch';
-import { test, expect, afterEach, vi } from 'vitest';
+import { test, expect, afterEach, beforeEach, vi } from 'vitest';
+
+beforeEach(() => {
+    initTa();
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -13,7 +18,7 @@ test('getChartRates, should correct parse array in pair', async () => {
 
     const addressString = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await ta.rates.getChartRates({
+    const { data, error } = await getChartRatesOp({
         token: addressObject,
         currency: 'rub'
     });
@@ -40,7 +45,7 @@ test('getChartRates, should correct parse array in pair', async () => {
 test('getRates, additionalProperties should be not convert to camelCase', async () => {
     mockFetch(getRates);
 
-    const { data, error } = await ta.rates.getRates({
+    const { data, error } = await getRatesOp({
         tokens: ['TON,TOKEN_WITH_UNDERSCORE'],
         currencies: ['USD', 'EUR']
     });
@@ -61,7 +66,7 @@ test('getRates, explode in params should be matter', async () => {
     //     })
     // );
 
-    await ta.rates.getRates({
+    await getRatesOp({
         tokens: ['TON', 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'],
         currencies: ['USD', 'EUR']
     });

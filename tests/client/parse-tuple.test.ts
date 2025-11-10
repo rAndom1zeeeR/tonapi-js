@@ -1,8 +1,13 @@
 import { Address, Tuple, TupleItem } from '@ton/core';
+import { execGetMethodForBlockchainAccount as execGetMethodForBlockchainAccountOp } from '@ton-api/client';
+import { initTa } from './utils/client';
 import { execGetMethodForBlockchainAccount } from './__mock__/tuple';
-import { ta } from './utils/client';
 import { mockFetch } from './utils/mockFetch';
-import { test, expect, afterEach, vi } from 'vitest';
+import { test, expect, afterEach, beforeEach, vi } from 'vitest';
+
+beforeEach(() => {
+    initTa();
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -17,7 +22,7 @@ test('Tuple test', async () => {
 
     const addressString = 'Ef_X4pRKtgXOXYMOXNgXNRdlhkNKJ9bTKMfqvj6HDIiQG98F';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await ta.blockchain.execGetMethodForBlockchainAccount(
+    const { data, error } = await execGetMethodForBlockchainAccountOp(
         addressObject,
         'list_nominators'
     );

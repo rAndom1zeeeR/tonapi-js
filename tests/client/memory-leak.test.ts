@@ -1,7 +1,12 @@
 import { getBlockchainBlockTransactions } from './__mock__/services';
-import { ta } from './utils/client';
-import { describe, test, expect } from 'vitest';
+import { status, getBlockchainBlockTransactions as getBlockchainBlockTransactionsOp } from '@ton-api/client';
+import { initTa } from './utils/client';
+import { describe, test, expect, beforeEach } from 'vitest';
 import { JSONStringify } from './utils/jsonbig';
+
+beforeEach(() => {
+    initTa();
+});
 
 global.fetch = () =>
     Promise.resolve(
@@ -27,10 +32,10 @@ describe.skip('Memory leak test', () => {
         const initialMemory = process.memoryUsage().heapUsed;
         const memoryUsageSamples: number[] = [];
 
-        await ta.utilities.status();
+        await status();
 
         for (let i = 0; i < iterations; i++) {
-            await ta.blockchain.getBlockchainBlockTransactions('(-1,8000000000000000,4234234)');
+            await getBlockchainBlockTransactionsOp('(-1,8000000000000000,4234234)');
 
             // 🔍 Log memory usage every 50_000 iterations
             if (i % 50_000 === 0) {

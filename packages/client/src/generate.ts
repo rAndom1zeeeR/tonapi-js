@@ -245,9 +245,10 @@ const generateApiParams: GenerateApiParams = {
             };
         },
         onPrepareConfig(config) {
-            // Fall back to previous version of the schema
-            addRouteToModuleByOperationId('addressParse', 'accounts', config);
-            addRouteToModuleByOperationId('status', 'blockchain', config);
+            // Note: These fallback routes create duplicates in flat export structure
+            // Commented out for flat SDK generation
+            // addRouteToModuleByOperationId('addressParse', 'accounts', config);
+            // addRouteToModuleByOperationId('status', 'blockchain', config);
 
             return config;
         }
