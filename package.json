@@ -13,6 +13,9 @@
     "build:client": "turbo run build --filter=@ton-api/client",
     "build:adapters": "turbo run build --filter=@ton-api/ton-adapter",
     "build:watch": "turbo run build:watch",
+    "typecheck": "npm run typecheck:tests && turbo run typecheck",
+    "typecheck:tests": "tsc --noEmit",
+    "typecheck:client": "turbo run typecheck --filter=@ton-api/client",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "clean": "turbo run clean && rimraf node_modules"

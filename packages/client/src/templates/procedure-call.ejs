@@ -71,7 +71,7 @@ const bodyContentKindTmpl = requestContentKind[requestBodyInfo.contentKind] || n
 const responseFormatTmpl = responseContentKind[successResponse.contentKind] || null;
 const securityTmpl = security ? 'true' : null;
 
-const describeReturnType = () => !config.toJS ? '' : `Promise<HttpResponse<${type}, ${errorType}>`;
+const describeReturnType = () => !config.toJS ? '' : `Promise<Result<${type}>>`;
 
 const reducedPathParams = addressType.map((name) => `const ${name} = ${getNameAddressFromId(name)}.toRawString();`).join('\n');
 

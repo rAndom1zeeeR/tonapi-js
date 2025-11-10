@@ -13,19 +13,18 @@ test('getChartRates, should correct parse array in pair', async () => {
 
     const addressString = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
     const addressObject = Address.parse(addressString);
-    const points = await ta.rates
-        .getChartRates({
-            token: addressObject,
-            currency: 'rub'
-        })
-        .then(res => res.points);
+    const { data, error } = await ta.rates.getChartRates({
+        token: addressObject,
+        currency: 'rub'
+    });
 
-    expect(points).toBeDefined();
-    expect(Array.isArray(points)).toBe(true);
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(data?.points).toBeDefined();
+    expect(Array.isArray(data?.points)).toBe(true);
+    expect(data?.points?.length).toBeGreaterThan(0);
 
-    expect(points.length).toBeGreaterThan(0);
-
-    points.forEach(point => {
+    data?.points?.forEach(point => {
         expect(Array.isArray(point)).toBe(true);
         expect(point.length).toBe(2);
 
@@ -41,15 +40,16 @@ test('getChartRates, should correct parse array in pair', async () => {
 test('getRates, additionalProperties should be not convert to camelCase', async () => {
     mockFetch(getRates);
 
-    const res = await ta.rates.getRates({
+    const { data, error } = await ta.rates.getRates({
         tokens: ['TON,TOKEN_WITH_UNDERSCORE'],
         currencies: ['USD', 'EUR']
     });
 
-    expect(res).toBeDefined();
-    expect(res.rates).toBeDefined();
-    expect(res.rates['TON']).toBeDefined();
-    expect(res.rates['TOKEN_WITH_UNDERSCORE']).toBeDefined();
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(data?.rates).toBeDefined();
+    expect(data?.rates['TON']).toBeDefined();
+    expect(data?.rates['TOKEN_WITH_UNDERSCORE']).toBeDefined();
 });
 
 test('getRates, explode in params should be matter', async () => {
@@ -67,7 +67,7 @@ test('getRates, explode in params should be matter', async () => {
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const url = fetchSpy.mock.calls[0][0] as string;
+    const url = fetchSpy.mock.calls[0]?.[0] as string;
     const searchParams = new URL(url).searchParams;
 
     expect(searchParams.get('tokens')).toBe('TON,EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs');

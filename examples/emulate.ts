@@ -22,8 +22,20 @@ const senderAddress = Address.parse('UQAQxxpzxmEVU0Lu8U0zNTxBzXIWPvo263TIN1OQM9Y
 const recipientAddress = Address.parse('UQDNzlh0XSZdb5_Qrlx5QjyZHVAO74v5oMeVVrtF_5Vt1rIt');
 
 // Get wallet's seqno and public key
-const { seqno } = await ta.wallet.getAccountSeqno(senderAddress);
-const { publicKey: publicKeyHex } = await ta.accounts.getAccountPublicKey(senderAddress);
+const { data: seqnoData, error: seqnoError } = await ta.wallet.getAccountSeqno(senderAddress);
+if (seqnoError) {
+    console.error('Error getting seqno:', seqnoError.message);
+    process.exit(1);
+}
+
+const { data: publicKeyData, error: publicKeyError } = await ta.accounts.getAccountPublicKey(senderAddress);
+if (publicKeyError) {
+    console.error('Error getting public key:', publicKeyError.message);
+    process.exit(1);
+}
+
+const seqno = seqnoData.seqno;
+const publicKeyHex = publicKeyData.publicKey;
 
 // Emulate transaction from wallet_v4 address
 const wallet = WalletContractV4.create({
@@ -73,9 +85,14 @@ const bocExternalMessage = beginCell()
     .endCell();
 
 // Emulate transaction
-const emulateTrace = await ta.emulation.emulateMessageToTrace(
+const { data: emulateTrace, error: emulateError } = await ta.emulation.emulateMessageToTrace(
     { boc: bocExternalMessage },
     { ignore_signature_check: true } // Ignore signature for execute message from other account
 );
+
+if (emulateError) {
+    console.error('Error emulating message:', emulateError.message);
+    process.exit(1);
+}
 
 console.log(emulateTrace);

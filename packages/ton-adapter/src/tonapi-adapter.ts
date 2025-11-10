@@ -60,29 +60,33 @@ function createProvider(
     return {
         async getState(): Promise<ContractState> {
             // Load state
-            const account: LoclaBlockchainRawAccount = await tonapi.blockchain
-                .getBlockchainRawAccount(address)
-                .catch((error: Error) => {
-                    if (error.message !== 'entity not found') {
-                        throw new Error(`Account request failed: ${error.message}`, error);
+            const { data: accountData, error: accountError } =
+                await tonapi.blockchain.getBlockchainRawAccount(address);
+
+            let account: LoclaBlockchainRawAccount;
+            if (accountError) {
+                if (accountError.message !== 'entity not found') {
+                    throw new Error(`Account request failed: ${accountError.message}`, accountError);
+                }
+
+                const mockResult: LoclaBlockchainRawAccount = {
+                    address: address,
+                    balance: 0n,
+                    lastTransactionLt: undefined,
+                    status: AccountStatus.Uninit,
+                    storage: {
+                        usedCells: 1,
+                        usedBits: 95,
+                        usedPublicCells: 0,
+                        lastPaid: Math.floor(new Date().getTime() / 1000),
+                        duePayment: 0n
                     }
+                };
 
-                    const mockResult: LoclaBlockchainRawAccount = {
-                        address: address,
-                        balance: 0n,
-                        lastTransactionLt: undefined,
-                        status: AccountStatus.Uninit,
-                        storage: {
-                            usedCells: 1,
-                            usedBits: 95,
-                            usedPublicCells: 0,
-                            lastPaid: Math.floor(new Date().getTime() / 1000),
-                            duePayment: 0n
-                        }
-                    };
-
-                    return mockResult;
-                });
+                account = mockResult;
+            } else {
+                account = accountData;
+            }
 
             // Convert state
             const last =
@@ -135,11 +139,15 @@ function createProvider(
                 throw new Error('Tuples as get parameters are not supported by tonapi');
             }
 
-            const result = await tonapi.blockchain.execGetMethodForBlockchainAccount(
+            const { data: result, error } = await tonapi.blockchain.execGetMethodForBlockchainAccount(
                 address,
                 name,
                 { args: args.map(TupleItemToTonapiString) }
             );
+
+            if (error) {
+                throw new Error(`Get method execution failed: ${error.message}`, error);
+            }
 
             return {
                 stack: new TupleReader(result.stack)
@@ -148,8 +156,15 @@ function createProvider(
         async external(message) {
             // Resolve init
             let neededInit: { code?: Cell | null; data?: Cell | null } | null = null;
-            if (init && (await tonapi.accounts.getAccount(address)).status !== 'active') {
-                neededInit = init;
+            if (init) {
+                const { data: accountInfo, error: accountError } =
+                    await tonapi.accounts.getAccount(address);
+                if (accountError) {
+                    throw new Error(`Failed to get account info: ${accountError.message}`, accountError);
+                }
+                if (accountInfo.status !== 'active') {
+                    neededInit = init;
+                }
             }
 
             // Send with state init
@@ -160,13 +175,23 @@ function createProvider(
             });
             const boc = beginCell().store(storeMessage(ext)).endCell();
 
-            await tonapi.blockchain.sendBlockchainMessage({ boc });
+            const { error: sendError } = await tonapi.blockchain.sendBlockchainMessage({ boc });
+            if (sendError) {
+                throw new Error(`Failed to send blockchain message: ${sendError.message}`, sendError);
+            }
         },
         async internal(via, message) {
             // Resolve init
             let neededInit: { code?: Cell | null; data?: Cell | null } | null = null;
-            if (init && (await tonapi.accounts.getAccount(address)).status !== 'active') {
-                neededInit = init;
+            if (init) {
+                const { data: accountInfo, error: accountError } =
+                    await tonapi.accounts.getAccount(address);
+                if (accountError) {
+                    throw new Error(`Failed to get account info: ${accountError.message}`, accountError);
+                }
+                if (accountInfo.status !== 'active') {
+                    neededInit = init;
+                }
             }
 
             // Resolve bounce
@@ -206,7 +231,7 @@ function createProvider(
                 createProvider(tonapi, params.address, params.init)
             );
         },
-        getTransactions(
+        async getTransactions(
             address: Address,
             lt: bigint,
             hash: Buffer,
@@ -216,14 +241,21 @@ function createProvider(
                 'hash param in getTransactions action ignored, beacause not supported',
                 hash.toString('hex')
             );
-            return tonapi.blockchain
-                .getBlockchainAccountTransactions(address, {
+            const { data: result, error } = await tonapi.blockchain.getBlockchainAccountTransactions(
+                address,
+                {
                     before_lt: lt + 1n,
                     limit
-                })
-                .then(({ transactions }) =>
-                    transactions.map(transaction => loadTransaction(transaction.raw.asSlice()))
-                );
+                }
+            );
+
+            if (error) {
+                throw new Error(`Failed to get account transactions: ${error.message}`, error);
+            }
+
+            return result.transactions.map(transaction =>
+                loadTransaction(transaction.raw.asSlice())
+            );
         }
     };
 }

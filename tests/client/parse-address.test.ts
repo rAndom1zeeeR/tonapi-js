@@ -14,10 +14,11 @@ test('Address simple in params & response', async () => {
     const addressString = 'UQC62nZpm36EFzADVfXDVd_4OpbFyc1D3w3ZvCPHLni8Dst4';
     const addressObject = Address.parse(addressString);
     const addressRawString = addressObject.toRawString();
-    const res = await ta.blockchain.getBlockchainRawAccount(addressObject);
+    const { data, error } = await ta.blockchain.getBlockchainRawAccount(addressObject);
 
-    expect(res).toBeDefined();
-    expect(Address.isAddress(res.address)).toBe(true);
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(Address.isAddress(data?.address)).toBe(true);
     expect(fetchSpy).toHaveBeenCalledWith(
         expect.stringContaining(addressRawString),
         expect.any(Object)
@@ -33,9 +34,10 @@ test('Address in request body test', async () => {
     ];
 
     const accountIds = addressStrings.map(str => Address.parse(str));
-    const res = await ta.accounts.getAccounts({ accountIds });
+    const { data, error } = await ta.accounts.getAccounts({ accountIds });
 
-    expect(res).toBeDefined();
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
     expect(fetchSpy).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
