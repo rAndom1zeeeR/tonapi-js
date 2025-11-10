@@ -10,11 +10,41 @@ import {
 import path from 'path';
 import * as fs from 'fs';
 import * as https from 'https';
+import * as yaml from 'js-yaml';
 
 const packageVersion = process.env.npm_package_version;
 
 const openapiPath = path.resolve(process.cwd(), 'src/api.yml');
 const openapiUrl = 'https://tonapi.io/v2/openapi.yml';
+
+/**
+ * Schema Patches System
+ * ---------------------
+ * This file (schema-patches.json) contains modifications that are automatically
+ * applied to the OpenAPI schema before client generation.
+ *
+ * Format: Standard JSON object that gets deeply merged with the original schema.
+ *
+ * Example:
+ * {
+ *   "components": {
+ *     "schemas": {
+ *       "ChartPoints": {
+ *         "type": "array",
+ *         "prefixItems": [
+ *           { "type": "integer", "format": "int64", "description": "Unix timestamp" },
+ *           { "type": "number", "description": "Price" }
+ *         ],
+ *         "items": false
+ *       }
+ *     }
+ *   }
+ * }
+ *
+ * The patch will be applied every time you run `npm run build`.
+ * To add new patches, simply edit src/schema-patches.json.
+ */
+const schemaPatchesPath = path.resolve(process.cwd(), 'src/schema-patches.json');
 
 function downloadSchema(url: string, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -33,6 +63,66 @@ function downloadSchema(url: string, outputPath: string): Promise<void> {
                 reject(err);
             });
     });
+}
+
+/**
+ * Deep merge two objects with priority to patch values
+ */
+function deepMerge(target: any, patch: any): any {
+    if (patch === null || patch === undefined) {
+        return target;
+    }
+
+    if (typeof patch !== 'object' || Array.isArray(patch)) {
+        return patch;
+    }
+
+    const result = { ...target };
+
+    for (const key in patch) {
+        if (patch.hasOwnProperty(key)) {
+            if (typeof patch[key] === 'object' && !Array.isArray(patch[key]) && patch[key] !== null) {
+                result[key] = deepMerge(target[key] || {}, patch[key]);
+            } else {
+                result[key] = patch[key];
+            }
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Apply patches from schema-patches.json to the downloaded schema
+ */
+function applySchemaPatches(schemaPath: string, patchesPath: string): void {
+    if (!fs.existsSync(patchesPath)) {
+        console.log('No schema patches file found, skipping patches');
+        return;
+    }
+
+    console.log('Applying schema patches...');
+
+    // Read the schema
+    const schemaContent = fs.readFileSync(schemaPath, 'utf8');
+    const schema = yaml.load(schemaContent) as any;
+
+    // Read the patches
+    const patchesContent = fs.readFileSync(patchesPath, 'utf8');
+    const patches = JSON.parse(patchesContent);
+
+    // Apply patches
+    const patchedSchema = deepMerge(schema, patches);
+
+    // Write back to file
+    const yamlOutput = yaml.dump(patchedSchema, {
+        lineWidth: -1,
+        noRefs: true,
+        sortKeys: false
+    });
+
+    fs.writeFileSync(schemaPath, yamlOutput, 'utf8');
+    console.log('Schema patches applied successfully');
 }
 
 function snakeToCamel(snakeCaseString: string): string {
@@ -167,7 +257,13 @@ const generateApiParams: GenerateApiParams = {
 };
 
 async function main() {
+    // Uncomment the following lines to download schema and apply patches automatically
     // await downloadSchema(openapiUrl, openapiPath);
+    // applySchemaPatches(openapiPath, schemaPatchesPath);
+
+    // Apply patches to existing schema
+    applySchemaPatches(openapiPath, schemaPatchesPath);
+
     generateApi(generateApiParams);
 }
 
