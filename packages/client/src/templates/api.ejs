@@ -64,18 +64,8 @@ const schemasObject = _.keys(config.originalSchema.components.schemas).reduce((a
     return acc;
 }, {});
 
-// TODO: Maybe we will need this in the future
-// const requestBodiesObject = _.keys(config.originalSchema.components.requestBodies).reduce((acc, key) => {
-//     const fullKey = "#/components/requestBodies/" + key;
-//     const requestBodyContent = config.originalSchema.components.requestBodies[key].content['application/json'];
-//     // Skip requestBodies with content type other than application/json
-//     acc[fullKey] = requestBodyContent && clearSchemaReferenceInformation(requestBodyContent.schema);
-//     return acc;
-// }, {});
-
 const componentsJson = JSON.stringify({
   ...schemasObject,
-  // ...requestBodiesObject
 });
 
 utils.clearSchemaReferenceInformation = clearSchemaReferenceInformation;
@@ -96,34 +86,54 @@ const components =  <%~ componentsJson %>
 <% }) %>
 */
 <% } %>
-export class TonApiClient {
 
-<% if(config.singleHttpClient) { %>
-  http: HttpClient;
+// Singleton HttpClient instance
+let httpClient: HttpClient | null = null;
 
-  constructor (apiConfig: ApiConfig = {}) {
-    this.http = new HttpClient(apiConfig);
+/**
+ * Initialize the API client with configuration
+ * @param apiConfig - Configuration for the API client (baseUrl, apiKey, etc.)
+ */
+export function initClient(apiConfig: ApiConfig = {}): void {
+  httpClient = new HttpClient(apiConfig);
+}
+
+/**
+ * Get the current HttpClient instance (creates one if it doesn't exist)
+ * @internal
+ */
+function getHttpClient(): HttpClient {
+  if (!httpClient) {
+    httpClient = new HttpClient();
   }
-<% } %>
+  return httpClient;
+}
 
+/**
+ * Update the API client configuration
+ * @param apiConfig - Configuration to update
+ */
+export function updateClient(apiConfig: Partial<ApiConfig>): void {
+  const client = getHttpClient();
+  if (apiConfig.baseUrl !== undefined) client.baseUrl = apiConfig.baseUrl;
+  if (apiConfig.apiKey !== undefined) client.setApiKey(apiConfig.apiKey);
+  if (apiConfig.fetch !== undefined) client.setCustomFetch(apiConfig.fetch);
+}
 
 <% if (routes.outOfModule) { %>
   <% for (const route of routes.outOfModule) { %>
 
-  <%~ includeFile('./procedure-call.ejs', { ...it, route }) %>
+<%~ includeFile('./procedure-call.ejs', { ...it, route, isFlat: true }) %>
 
   <% } %>
 <% } %>
 
 <% if (routes.combined) { %>
   <% for (const { routes: combinedRoutes = [], moduleName } of routes.combined) { %>
-  <%~ moduleName %> = {
-  <% for (const route of combinedRoutes) { %>
+    <% for (const route of combinedRoutes) { %>
 
-  <%~ includeFile('./procedure-call.ejs', { ...it, route }) %>
+<%~ includeFile('./procedure-call.ejs', { ...it, route, isFlat: true }) %>
 
-  <% } %>
-  }
+    <% } %>
   <% } %>
 <% } %>
-}

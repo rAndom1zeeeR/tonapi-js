@@ -1,8 +1,10 @@
-import { ta } from './utils/client';
+import { status } from '@ton-api/client';
+import { initTa } from './utils/client';
 import { vi, test, expect, afterEach, beforeEach } from 'vitest';
 import { mockFetch } from './utils/mockFetch';
 
 beforeEach(() => {
+    initTa();
     vi.restoreAllMocks();
 });
 
@@ -17,7 +19,7 @@ test('should return a successful response with JSON data', async () => {
     const mockData = { status: 'ok', uptime: 123456 };
     const fetchSpy = mockFetch(mockData);
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(error).toBeNull();
     expect(data).toEqual(mockData);
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -30,7 +32,7 @@ test('should handle an error response with a JSON message', async () => {
     const mockError = { error: 'Invalid request' };
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse(mockError, 400));
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Invalid request');
@@ -41,7 +43,7 @@ test('should handle an error response with a JSON message', async () => {
 test('should handle an error response with a string message', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse('Simple error message', 500));
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Simple error message');
@@ -53,7 +55,7 @@ test('should include cause in the error object', async () => {
     const mockError = { error: 'Invalid request' };
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse(mockError, 400));
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Invalid request');
@@ -65,7 +67,7 @@ test('should handle an error response without JSON', async () => {
     const mockError = new Error('Network failure');
     vi.spyOn(global, 'fetch').mockRejectedValueOnce(mockError);
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Network failure');
@@ -79,7 +81,7 @@ test('should handle an error response with invalid JSON', async () => {
     });
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(response);
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toContain('Failed to parse error response');
@@ -90,7 +92,7 @@ test('should handle an error response with invalid JSON', async () => {
 test('should handle an unknown error type (object)', async () => {
     vi.spyOn(global, 'fetch').mockRejectedValueOnce({ message: 'Some unknown error' } as any);
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Unknown error occurred');
@@ -99,7 +101,7 @@ test('should handle an unknown error type (object)', async () => {
 test('should handle an unknown error type (string)', async () => {
     vi.spyOn(global, 'fetch').mockRejectedValueOnce('Some unknown error' as any);
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Unknown error occurred');
@@ -108,7 +110,7 @@ test('should handle an unknown error type (string)', async () => {
 test('should handle null as an error', async () => {
     vi.spyOn(global, 'fetch').mockRejectedValueOnce(null as any);
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Unknown error occurred');
@@ -117,7 +119,7 @@ test('should handle null as an error', async () => {
 test('should handle undefined as an error', async () => {
     vi.spyOn(global, 'fetch').mockRejectedValueOnce(undefined as any);
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Unknown error occurred');
@@ -127,7 +129,7 @@ test('should handle a JSON error response without an error field', async () => {
     const mockError = { message: 'Some error without error field' };
     vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse(mockError, 400));
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(data).toBeNull();
     expect(error).not.toBeNull();
     expect(error?.message).toBe('Some error without error field');

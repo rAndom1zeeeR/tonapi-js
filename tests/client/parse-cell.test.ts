@@ -1,8 +1,13 @@
 import { Address, Cell, TupleItem, TupleItemCell } from '@ton/core';
-import { ta } from './utils/client';
+import { getBlockchainRawAccount as getBlockchainRawAccountOp, sendBlockchainMessage, execGetMethodForBlockchainAccount as execGetMethodForBlockchainAccountOp } from '@ton-api/client';
+import { initTa } from './utils/client';
 import { execGetMethodForBlockchainAccount, getBlockchainRawAccount } from './__mock__/cell';
 import { mockFetch } from './utils/mockFetch';
-import { test, expect, afterEach, vi } from 'vitest';
+import { test, expect, afterEach, beforeEach, vi } from 'vitest';
+
+beforeEach(() => {
+    initTa();
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -13,7 +18,7 @@ test('Cell hex in response test', async () => {
 
     const addressString = '0:009d03ddede8c2620a72f999d03d5888102250a214bf574a29ff64df80162168';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await ta.blockchain.getBlockchainRawAccount(addressObject);
+    const { data, error } = await getBlockchainRawAccountOp(addressObject);
 
     expect(error).toBeNull();
     expect(data).toBeDefined();
@@ -33,7 +38,7 @@ test('Cell hex in request body test', async () => {
 
     const cell = Cell.fromBase64(cellBase64);
 
-    await ta.blockchain.sendBlockchainMessage({
+    await sendBlockchainMessage({
         boc: cell
     });
 
@@ -57,7 +62,7 @@ test('Cell base64 in response test', async () => {
 
     const addressString = 'EQDW6q4sRqQwNCmW4qwUpeFSU1Xhd6l3xwJ6jjknBPzxKNtT';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await ta.blockchain.execGetMethodForBlockchainAccount(
+    const { data, error } = await execGetMethodForBlockchainAccountOp(
         addressObject,
         'royalty_params'
     );

@@ -1,9 +1,14 @@
-import { TonApiClient, ApiConfig } from '@ton-api/client';
-import { ta, taWithApiKey } from './utils/client';
+import { initClient, status, getAccounts as getAccountsOp, getAccountPublicKey } from '@ton-api/client';
+import { initTa, useTa, useTaWithApiKey } from './utils/client';
 import { Address } from '@ton/core';
 import { getAccounts } from './__mock__/services';
-import { vi, test, expect, afterEach } from 'vitest';
+import { vi, test, expect, afterEach, beforeEach } from 'vitest';
 import { mockFetch } from './utils/mockFetch';
+
+beforeEach(() => {
+    // Reset to default client before each test
+    initTa();
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -15,7 +20,7 @@ test('Client status test', async () => {
         indexing_latency: 8
     });
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(error).toBeNull();
     expect(data).toBeDefined();
 });
@@ -26,7 +31,8 @@ test('Client apiKey test', async () => {
         indexing_latency: 8
     });
 
-    const { data, error } = await taWithApiKey.utilities.status();
+    useTaWithApiKey();
+    const { data, error } = await status();
     expect(error).toBeNull();
     expect(data).toBeDefined();
 
@@ -46,12 +52,10 @@ test('Client apiKey missing test', async () => {
         indexing_latency: 8
     });
 
-    const config: ApiConfig = {
+    initClient({
         baseUrl: 'https://tonapi.io'
-    };
-
-    const localTa = new TonApiClient(config);
-    const { data, error } = await localTa.utilities.status();
+    });
+    const { data, error } = await status();
     expect(error).toBeNull();
     expect(data).toBeDefined();
 
@@ -71,12 +75,10 @@ test('Client fallback test', async () => {
         indexing_latency: 8
     });
 
-    const config: ApiConfig = {
+    initClient({
         baseUrl: 'https://tonapi.io'
-    };
-
-    const localTa = new TonApiClient(config);
-    const { data, error } = await localTa.blockchain.status();
+    });
+    const { data, error } = await status();
     expect(error).toBeNull();
     expect(data).toBeDefined();
 
@@ -96,7 +98,7 @@ test('Client x-tonapi-client header test', async () => {
         indexing_latency: 8
     });
 
-    const { data, error } = await ta.utilities.status();
+    const { data, error } = await status();
     expect(error).toBeNull();
     expect(data).toBeDefined();
 
@@ -123,14 +125,12 @@ test('Client custom fetch is called', async () => {
         })
     );
 
-    const config: ApiConfig = {
+    initClient({
         baseUrl: 'https://tonapi.io',
         fetch: customFetch
-    };
+    });
 
-    const ta = new TonApiClient(config);
-
-    await ta.utilities.status();
+    await status();
 
     expect(customFetch).toHaveBeenCalled();
 });
@@ -143,7 +143,7 @@ test('Client post method in fetch', async () => {
         'UQAW2nxA69WYdMr90utDmpeZFwvG4XYcc9iibAP5sZnlojRO'
     ];
 
-    const { data, error } = await ta.accounts.getAccounts({
+    const { data, error } = await getAccountsOp({
         accountIds: accountIds.map(id => Address.parse(id))
     });
 
@@ -164,7 +164,7 @@ test('Client response type for schema outside component (with snake_case)', asyn
     });
 
     const senderAddress = Address.parse('UQAQxxpzxmEVU0Lu8U0zNTxBzXIWPvo263TIN1OQM9YvxsnV');
-    const { data, error } = await ta.accounts.getAccountPublicKey(senderAddress);
+    const { data, error } = await getAccountPublicKey(senderAddress);
 
     expect(error).toBeNull();
     expect(data).toBeDefined();

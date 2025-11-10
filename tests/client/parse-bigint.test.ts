@@ -1,8 +1,13 @@
 import { Address } from '@ton/core';
-import { ta } from './utils/client';
+import { getAccounts as getAccountsOp, getJettonInfo as getJettonInfoOp } from '@ton-api/client';
+import { initTa } from './utils/client';
 import { getAccount, getJettonInfo } from './__mock__/bigint';
 import { mockFetch } from './utils/mockFetch';
-import { vi, afterEach, test, expect } from 'vitest';
+import { vi, afterEach, beforeEach, test, expect } from 'vitest';
+
+beforeEach(() => {
+    initTa();
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -16,7 +21,7 @@ test('BigInt parse data in number test', async () => {
         '0:7c9fc62291740a143086c807fe322accfd12737b3c2243676228176707c7ce40'
     ];
     const accountIds = addressStrings.map(addr => Address.parse(addr));
-    const { data, error } = await ta.accounts.getAccounts({ accountIds });
+    const { data, error } = await getAccountsOp({ accountIds });
 
     expect(error).toBeNull();
     expect(data).toBeDefined();
@@ -31,7 +36,7 @@ test('BigInt parse data in string test', async () => {
     mockFetch(getJettonInfo);
 
     const usdtJettonAddress = Address.parse('EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs');
-    const { data, error } = await ta.jettons.getJettonInfo(usdtJettonAddress);
+    const { data, error } = await getJettonInfoOp(usdtJettonAddress);
 
     expect(error).toBeNull();
     expect(data).toBeDefined();

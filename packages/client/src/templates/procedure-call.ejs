@@ -1,5 +1,5 @@
 <%
-const { utils, route, config } = it;
+const { utils, route, config, isFlat } = it;
 const { requestBodyInfo, responseBodyInfo, responseBodySchema, specificArgNameResolver } = route;
 const { _, getInlineParseContent, getParseContent, parseSchema, getComponentByRef, require, clearSchemaReferenceInformation } = utils;
 const { parameters, path, method, payload, query, formData, security, requestParams } = route.request;
@@ -105,9 +105,9 @@ const queryImplodeTmpl = queryImplodeParams.length === 0 ? null : JSON.stringify
 <%~ routeDocs.lines %>
 
  */
-<%~ route.routeName.usage %><%~ route.namespace ? ': ' : ' = ' %> (<%~ wrapperArgs %>)<%~ config.toJS ? `: ${describeReturnType()}` : "" %> => {
+<% if (isFlat) { %>export const <% } %><%~ route.routeName.usage %><%~ route.namespace && !isFlat ? ': ' : ' = ' %> (<%~ wrapperArgs %>)<%~ config.toJS ? `: ${describeReturnType()}` : "" %> => {
     <%~ reducedPathParams %>
-    const req = <%~ config.singleHttpClient ? 'this.http.request' : 'this.request' %><<%~ type %>, <%~ errorType %>>({
+    const req = <%~ isFlat ? 'getHttpClient().request' : config.singleHttpClient ? 'this.http.request' : 'this.request' %><<%~ type %>, <%~ errorType %>>({
         path: `<%~ path %>`,
         method: '<%~ _.upperCase(method) %>',
         <%~ queryTmpl ? `query: ${queryTmplValue},` : '' %>
@@ -120,5 +120,5 @@ const queryImplodeTmpl = queryImplodeParams.length === 0 ? null : JSON.stringify
     });
 
     return prepareResponse<<%~ type %>>(req<%~ schemaTmpl %>);
-}<%~ route.namespace ? ',' : '' %>
+}<%~ route.namespace && !isFlat ? ',' : '' %>
 
