@@ -1,7 +1,14 @@
 import { Address, Cell, TupleItem, TupleItemCell } from '@ton/core';
-import { getBlockchainRawAccount as getBlockchainRawAccountOp, sendBlockchainMessage, execGetMethodForBlockchainAccount as execGetMethodForBlockchainAccountOp } from '@ton-api/client';
+import {
+    getBlockchainRawAccount,
+    sendBlockchainMessage,
+    execGetMethodForBlockchainAccount
+} from '@ton-api/client';
 import { initTa } from './utils/client';
-import { execGetMethodForBlockchainAccount, getBlockchainRawAccount } from './__mock__/cell';
+import {
+    execGetMethodForBlockchainAccount as execGetMethodForBlockchainAccountMock,
+    getBlockchainRawAccount as getBlockchainRawAccountMock
+} from './__mock__/cell';
 import { mockFetch } from './utils/mockFetch';
 import { test, expect, afterEach, beforeEach, vi } from 'vitest';
 
@@ -14,11 +21,11 @@ afterEach(() => {
 });
 
 test('Cell hex in response test', async () => {
-    mockFetch(getBlockchainRawAccount);
+    mockFetch(getBlockchainRawAccountMock);
 
     const addressString = '0:009d03ddede8c2620a72f999d03d5888102250a214bf574a29ff64df80162168';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await getBlockchainRawAccountOp(addressObject);
+    const { data, error } = await getBlockchainRawAccount(addressObject);
 
     expect(error).toBeNull();
     expect(data).toBeDefined();
@@ -58,11 +65,11 @@ const guardCell = (item: TupleItem): item is TupleItemCell => {
 };
 
 test('Cell base64 in response test', async () => {
-    mockFetch(execGetMethodForBlockchainAccount);
+    mockFetch(execGetMethodForBlockchainAccountMock);
 
     const addressString = 'EQDW6q4sRqQwNCmW4qwUpeFSU1Xhd6l3xwJ6jjknBPzxKNtT';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await execGetMethodForBlockchainAccountOp(
+    const { data, error } = await execGetMethodForBlockchainAccount(
         addressObject,
         'royalty_params'
     );
@@ -75,10 +82,11 @@ test('Cell base64 in response test', async () => {
     expect(cellTupleItem).toBeDefined();
     expect(cellTupleItem?.type).toBe('cell');
 
-    if (cellTupleItem && guardCell(cellTupleItem)) {
-        expect(cellTupleItem.cell).toBeDefined();
-        expect(cellTupleItem.cell).toBeInstanceOf(Cell);
-    } else {
-        throw new Error('Cell guard failed');
+    if (!cellTupleItem || !guardCell(cellTupleItem)) {
+        expect.fail('Expected cellTupleItem to be a cell type');
+        return;
     }
+
+    expect(cellTupleItem.cell).toBeDefined();
+    expect(cellTupleItem.cell).toBeInstanceOf(Cell);
 });
