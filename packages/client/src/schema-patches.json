@@ -16,7 +16,143 @@
         ],
         "items": false,
         "additionalItems": false,
-        "example": [[1668436763, 97.21323234]]
+        "example": [1668436763, 97.21323234]
+      }
+    }
+  },
+  "paths": {
+    "/v2/rates": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tokens",
+            "description": "accept cryptocurrencies or jetton master addresses, separated by commas",
+            "required": true,
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "format": "address"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "example": ["ton"]
+            }
+          },
+          {
+            "in": "query",
+            "name": "currencies",
+            "description": "accept cryptocurrencies and all possible fiat currencies, separated by commas",
+            "required": true,
+            "explode": false,
+            "schema": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string"
+              },
+              "example": ["ton","usd","rub"]
+            }
+          }
+        ]
+      }
+    },
+    "/v2/rates/chart": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "description": "accept cryptocurrencies or jetton master addresses",
+            "required": true,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "address"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "example": "usd"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 2114380800,
+              "example": 1668436763
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "maximum": 2114380800,
+              "example": 1668436763
+            }
+          },
+          {
+            "name": "points_count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int",
+              "maximum": 200,
+              "minimum": 0,
+              "default": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "token chart",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["points"],
+                  "properties": {
+                    "points": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChartPoints"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     }
   }

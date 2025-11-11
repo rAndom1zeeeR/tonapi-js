@@ -230,7 +230,7 @@ const generateApiParams: GenerateApiParams = {
 
 async function main() {
     // Download schema and apply patches automatically
-    // await downloadSchema(openapiUrl, openapiPath);
+    await downloadSchema(openapiUrl, openapiPath);
     applySchemaPatches(openapiPath, schemaPatchesPath);
 
     generateApi(generateApiParams);
