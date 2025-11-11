@@ -1,7 +1,7 @@
 import { WalletContractV5R1 } from '@ton/ton';
 import { Address, beginCell, internal, external, SendMode, Message } from '@ton/core';
 import { mnemonicToPrivateKey } from '@ton/crypto';
-import { TonApiClient } from '@ton-api/client';
+import { initClient, getBlockchainTransactionByMessageHash } from '@ton-api/client';
 import { ContractAdapter } from '@ton-api/ton-adapter';
 import { Cell, loadMessage } from '@ton/core';
 
@@ -36,11 +36,11 @@ function normalizeHash(message: Message, normalizeExternal: boolean): Buffer {
 // ----------------------------------------------------------
 
 // Step 1: Initialize the TonAPI client
-const ta = new TonApiClient({
+initClient({
     baseUrl: 'https://tonapi.io'
     // apiKey: 'YOUR_API_KEY', // Optional, improves request limits and access
 });
-const adapter = new ContractAdapter(ta);
+const adapter = new ContractAdapter();
 
 // Step 2: Define the wallet and recipient addresses
 const destination = Address.parse('EQCKWpx7cNMpvmcN5ObM5lLUZHZRFKqYA4xmw9jOry0ZsF9M');
@@ -83,7 +83,7 @@ console.log('Manual Message Hash:', manualExtMessageHash.toString('hex'));
 await delay(10000);
 
 // Step 8: Retrieve the resulting transaction using the normalized external hash
-const manualTransaction = await ta.blockchain.getBlockchainTransactionByMessageHash(
+const manualTransaction = await getBlockchainTransactionByMessageHash(
     manualExtMessageHash.toString('hex')
 );
 console.log('Manual Transaction Details:', manualTransaction);
@@ -106,7 +106,7 @@ const bocExtMessageHash = normalizeHash(bocMessage, true);
 console.log('BOC Message Hash:', bocExtMessageHash.toString('hex'));
 
 // Step 3: Retrieve the transaction using that hash
-const bocTransaction = await ta.blockchain.getBlockchainTransactionByMessageHash(
+const bocTransaction = await getBlockchainTransactionByMessageHash(
     bocExtMessageHash.toString('hex')
 );
 console.log('BOC Transaction Details:', bocTransaction);
