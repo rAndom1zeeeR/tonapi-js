@@ -1,3 +1,5 @@
+<%~ includeFile('./errors.ejs') %>
+
 type ComponentRef = keyof typeof components;
 
 export interface TonApiError {
@@ -33,7 +35,12 @@ function camelToSnake(camel: string): string {
 }
 
 function cellParse(src: string): Cell {
-  return Cell.fromHex(src);
+  try {
+    return Cell.fromHex(src);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new TonApiParsingError('Cell', msg, e);
+  }
 }
 
 function parseHexToBigInt(str: string) {
@@ -48,7 +55,19 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
               const data = prepareResponseData<U>(obj, orSchema);
               return { data, error: null } as Result<U>;
           } catch (parseError: unknown) {
-              // SDK parsing error (Address.parse, Cell.fromHex, BigInt conversion, etc.)
+              // Handle our custom parsing errors with centralized formatting
+              if (parseError instanceof TonApiParsingError) {
+                  return {
+                      data: null,
+                      error: {
+                          message: parseError.formatMessage(), // ✨ Centralized formatting!
+                          type: 'parsing_error',
+                          cause: parseError
+                      }
+                  } as Result<U>;
+              }
+
+              // Handle other errors (should not happen, but defensive)
               const message = parseError instanceof Error
                   ? `SDK parsing error: ${parseError.message}`
                   : 'SDK parsing error: Unknown error';
@@ -147,7 +166,12 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
   } else if (schema) {
     if (schema.type === "string") {
       if (schema.format === "address") {
-        return Address.parse(obj as string) as U;
+        try {
+          return Address.parse(obj as string) as U;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          throw new TonApiParsingError('Address', msg, e);
+        }
       }
 
       if (schema.format === "cell") {
@@ -155,18 +179,33 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
       }
 
       if (schema['x-js-format'] === 'bigint') {
+        try {
           return BigInt(obj as string) as U;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          throw new TonApiParsingError('BigInt', msg, e);
+        }
       }
 
       // maybe not used
       if (schema.format === "cell-base64") {
-        return obj && (Cell.fromBase64(obj as string) as U);
+        try {
+          return obj && (Cell.fromBase64(obj as string) as U);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          throw new TonApiParsingError('Cell', msg, e);
+        }
       }
     }
 
     if (schema.type === "integer") {
       if (schema['x-js-format'] === "bigint") {
-        return BigInt(obj as number) as U;
+        try {
+          return BigInt(obj as number) as U;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          throw new TonApiParsingError('BigInt', msg, e);
+        }
       }
 
       return Number(obj as number) as U;
@@ -206,7 +245,11 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
               type: "nan"
             } as U;
           default:
-            throw new Error(`Unknown tuple item type: ${obj.type}`);
+            throw new TonApiParsingError(
+              'TupleItem',
+              `Unknown tuple item type: ${obj.type}`,
+              obj
+            );
         }
       }
     }

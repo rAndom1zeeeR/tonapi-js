@@ -1,0 +1,39 @@
+/**
+ * Single error class for all parsing errors in the TonAPI SDK
+ *
+ * Provides type-safe error handling with centralized message formatting.
+ * Use parsingType property to distinguish between Address, Cell, BigInt, and TupleItem errors.
+ *
+ * @example
+ * ```typescript
+ * if (error.cause instanceof TonApiParsingError) {
+ *   console.log('Parsing type:', error.cause.parsingType); // 'Address', 'Cell', 'BigInt', 'TupleItem'
+ *   console.log('Error message:', error.cause.formatMessage());
+ * }
+ * ```
+ */
+export class TonApiParsingError extends Error {
+  readonly type = 'parsing_error' as const;
+  readonly parsingType: string;
+  readonly originalCause: unknown;
+
+  constructor(parsingType: string, message: string, cause: unknown) {
+    super(message);
+    this.name = 'TonApiParsingError';
+    this.parsingType = parsingType;
+    this.originalCause = cause;
+
+    // Maintain proper stack trace in V8
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+  }
+
+  /**
+   * Format error message for end users
+   * Centralized formatting - change here to change everywhere
+   */
+  formatMessage(): string {
+    return `SDK parsing error [${this.parsingType}]: ${this.message}`;
+  }
+}

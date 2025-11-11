@@ -1,10 +1,8 @@
 import {
-    GenerateApiConfiguration,
     GenerateApiParams,
     PrimitiveTypeStruct,
     SchemaComponent,
     generateApi
-    // generateTemplates,
 } from 'swagger-typescript-api';
 
 import path from 'path';
@@ -81,7 +79,11 @@ function deepMerge(target: any, patch: any): any {
 
     for (const key in patch) {
         if (patch.hasOwnProperty(key)) {
-            if (typeof patch[key] === 'object' && !Array.isArray(patch[key]) && patch[key] !== null) {
+            if (
+                typeof patch[key] === 'object' &&
+                !Array.isArray(patch[key]) &&
+                patch[key] !== null
+            ) {
                 result[key] = deepMerge(target[key] || {}, patch[key]);
             } else {
                 result[key] = patch[key];
@@ -175,29 +177,6 @@ function onCreateComponent(component: SchemaComponent) {
     return component;
 }
 
-function addRouteToModuleByOperationId(
-    operationId: string,
-    moduleName: string,
-    config: GenerateApiConfiguration
-) {
-    const route = config.routes.combined
-        ?.find(route => route.routes.find(route => route.routeName.usage === operationId))
-        ?.routes.find(route => route.routeName.usage === operationId);
-
-    if (route) {
-        const newRoute = {
-            ...route,
-            raw: {
-                ...route.raw,
-                deprecated: true
-            }
-        };
-        config.routes.combined
-            ?.find(route => route.moduleName === moduleName)
-            ?.routes.push(newRoute);
-    }
-}
-
 const generateApiParams: GenerateApiParams = {
     name: 'src/client.ts',
     output: path.resolve(process.cwd(), './'),
@@ -243,14 +222,6 @@ const generateApiParams: GenerateApiParams = {
                 ...originalSchema,
                 format: originalSchema['x-js-format'] ?? originalSchema.format
             };
-        },
-        onPrepareConfig(config) {
-            // Note: These fallback routes create duplicates in flat export structure
-            // Commented out for flat SDK generation
-            // addRouteToModuleByOperationId('addressParse', 'accounts', config);
-            // addRouteToModuleByOperationId('status', 'blockchain', config);
-
-            return config;
         }
     },
     // @ts-ignore
@@ -258,23 +229,11 @@ const generateApiParams: GenerateApiParams = {
 };
 
 async function main() {
-    // Uncomment the following lines to download schema and apply patches automatically
+    // Download schema and apply patches automatically
     // await downloadSchema(openapiUrl, openapiPath);
-    // applySchemaPatches(openapiPath, schemaPatchesPath);
-
-    // Apply patches to existing schema
     applySchemaPatches(openapiPath, schemaPatchesPath);
 
     generateApi(generateApiParams);
 }
 
 main();
-
-// generateTemplates({
-//   cleanOutput: false,
-//   output: path.resolve(process.cwd(), "./src/templates"),
-//   httpClientType: "fetch",
-//   modular: false,
-//   silent: false,
-//   // rewrite: false,
-// });

@@ -3478,29 +3478,6 @@ class HttpClient {
         }
     };
 
-    public setApiKey = (apiKey: string | undefined) => {
-        if (apiKey) {
-            this.baseApiParams = {
-                ...this.baseApiParams,
-                headers: {
-                    ...(this.baseApiParams.headers || {}),
-                    Authorization: `Bearer ${apiKey}`
-                } as HeadersInit
-            };
-        } else {
-            const headers = { ...(this.baseApiParams.headers || {}) } as Record<string, string>;
-            delete headers['Authorization'];
-            this.baseApiParams = {
-                ...this.baseApiParams,
-                headers: headers as HeadersInit
-            };
-        }
-    };
-
-    public setCustomFetch = (fetchFn: typeof fetch | undefined) => {
-        this.providedFetch = fetchFn ?? null;
-    };
-
     public request = async <T = any, E = any>({
         body,
         secure,
@@ -5805,6 +5782,46 @@ const components = {
         properties: { id: { type: 'integer', format: 'int64' }, method: { type: 'string' } }
     }
 };
+/**
+ * Single error class for all parsing errors in the TonAPI SDK
+ *
+ * Provides type-safe error handling with centralized message formatting.
+ * Use parsingType property to distinguish between Address, Cell, BigInt, and TupleItem errors.
+ *
+ * @example
+ * ```typescript
+ * if (error.cause instanceof TonApiParsingError) {
+ *   console.log('Parsing type:', error.cause.parsingType); // 'Address', 'Cell', 'BigInt', 'TupleItem'
+ *   console.log('Error message:', error.cause.formatMessage());
+ * }
+ * ```
+ */
+export class TonApiParsingError extends Error {
+    readonly type = 'parsing_error' as const;
+    readonly parsingType: string;
+    readonly originalCause: unknown;
+
+    constructor(parsingType: string, message: string, cause: unknown) {
+        super(message);
+        this.name = 'TonApiParsingError';
+        this.parsingType = parsingType;
+        this.originalCause = cause;
+
+        // Maintain proper stack trace in V8
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, this.constructor);
+        }
+    }
+
+    /**
+     * Format error message for end users
+     * Centralized formatting - change here to change everywhere
+     */
+    formatMessage(): string {
+        return `SDK parsing error [${this.parsingType}]: ${this.message}`;
+    }
+}
+
 type ComponentRef = keyof typeof components;
 
 export interface TonApiError {
@@ -5838,7 +5855,12 @@ function camelToSnake(camel: string): string {
 }
 
 function cellParse(src: string): Cell {
-    return Cell.fromHex(src);
+    try {
+        return Cell.fromHex(src);
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new TonApiParsingError('Cell', msg, e);
+    }
 }
 
 function parseHexToBigInt(str: string) {
@@ -5853,7 +5875,19 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
                 const data = prepareResponseData<U>(obj, orSchema);
                 return { data, error: null } as Result<U>;
             } catch (parseError: unknown) {
-                // SDK parsing error (Address.parse, Cell.fromHex, BigInt conversion, etc.)
+                // Handle our custom parsing errors with centralized formatting
+                if (parseError instanceof TonApiParsingError) {
+                    return {
+                        data: null,
+                        error: {
+                            message: parseError.formatMessage(), // ✨ Centralized formatting!
+                            type: 'parsing_error',
+                            cause: parseError
+                        }
+                    } as Result<U>;
+                }
+
+                // Handle other errors (should not happen, but defensive)
                 const message =
                     parseError instanceof Error
                         ? `SDK parsing error: ${parseError.message}`
@@ -5939,7 +5973,12 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
     } else if (schema) {
         if (schema.type === 'string') {
             if (schema.format === 'address') {
-                return Address.parse(obj as string) as U;
+                try {
+                    return Address.parse(obj as string) as U;
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    throw new TonApiParsingError('Address', msg, e);
+                }
             }
 
             if (schema.format === 'cell') {
@@ -5947,18 +5986,33 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
             }
 
             if (schema['x-js-format'] === 'bigint') {
-                return BigInt(obj as string) as U;
+                try {
+                    return BigInt(obj as string) as U;
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    throw new TonApiParsingError('BigInt', msg, e);
+                }
             }
 
             // maybe not used
             if (schema.format === 'cell-base64') {
-                return obj && (Cell.fromBase64(obj as string) as U);
+                try {
+                    return obj && (Cell.fromBase64(obj as string) as U);
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    throw new TonApiParsingError('Cell', msg, e);
+                }
             }
         }
 
         if (schema.type === 'integer') {
             if (schema['x-js-format'] === 'bigint') {
-                return BigInt(obj as number) as U;
+                try {
+                    return BigInt(obj as number) as U;
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    throw new TonApiParsingError('BigInt', msg, e);
+                }
             }
 
             return Number(obj as number) as U;
@@ -5999,7 +6053,11 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                             type: 'nan'
                         } as U;
                     default:
-                        throw new Error(`Unknown tuple item type: ${obj.type}`);
+                        throw new TonApiParsingError(
+                            'TupleItem',
+                            `Unknown tuple item type: ${obj.type}`,
+                            obj
+                        );
                 }
             }
         }
@@ -6091,8 +6149,21 @@ function prepareRequestData(data: any, orSchema?: any): any {
 let httpClient: HttpClient | null = null;
 
 /**
- * Initialize the API client with configuration
- * @param apiConfig - Configuration for the API client (baseUrl, apiKey, etc.)
+ * Initialize the API client with configuration.
+ * Should be called once at application startup.
+ *
+ * @param apiConfig - Configuration for the API client
+ * @param apiConfig.baseUrl - API base URL
+ * @param apiConfig.apiKey - API authentication key
+ * @param apiConfig.baseApiParams - Additional request parameters
+ *
+ * @example
+ * ```typescript
+ * initClient({
+ *   baseUrl: 'https://tonapi.io',
+ *   apiKey: process.env.TON_API_KEY
+ * });
+ * ```
  */
 export function initClient(apiConfig: ApiConfig = {}): void {
     httpClient = new HttpClient(apiConfig);
@@ -6107,17 +6178,6 @@ function getHttpClient(): HttpClient {
         httpClient = new HttpClient();
     }
     return httpClient;
-}
-
-/**
- * Update the API client configuration
- * @param apiConfig - Configuration to update
- */
-export function updateClient(apiConfig: Partial<ApiConfig>): void {
-    const client = getHttpClient();
-    if (apiConfig.baseUrl !== undefined) client.baseUrl = apiConfig.baseUrl;
-    if (apiConfig.apiKey !== undefined) client.setApiKey(apiConfig.apiKey);
-    if (apiConfig.fetch !== undefined) client.setCustomFetch(apiConfig.fetch);
 }
 
 /**
