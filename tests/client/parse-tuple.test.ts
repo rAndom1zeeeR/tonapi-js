@@ -36,20 +36,32 @@ test('Tuple test', async () => {
     expect(highLevelTuple?.type).toBeDefined();
     expect(highLevelTuple?.type).toBe('tuple');
 
-    if (highLevelTuple && guardTuple(highLevelTuple)) {
-        expect(highLevelTuple.items).toBeDefined();
-
-        const secondLevelTupleFirst = highLevelTuple.items[0];
-        expect(secondLevelTupleFirst).toBeDefined();
-        expect(secondLevelTupleFirst?.type).toBeDefined();
-        expect(secondLevelTupleFirst?.type).toBe('tuple');
-
-        if (secondLevelTupleFirst && guardTuple(secondLevelTupleFirst)) {
-            expect(secondLevelTupleFirst.items).toBeDefined();
-        } else {
-            throw new Error('Second Tuple guard failed');
-        }
-    } else {
-        throw new Error('First Tuple guard failed');
+    if (!highLevelTuple) {
+        expect.fail('Expected highLevelTuple to be defined');
+        return;
     }
+
+    if (!guardTuple(highLevelTuple)) {
+        expect.fail('Expected highLevelTuple to be a tuple type');
+        return;
+    }
+
+    expect(highLevelTuple.items).toBeDefined();
+
+    const secondLevelTupleFirst = highLevelTuple.items[0];
+    expect(secondLevelTupleFirst).toBeDefined();
+    expect(secondLevelTupleFirst?.type).toBeDefined();
+    expect(secondLevelTupleFirst?.type).toBe('tuple');
+
+    if (!secondLevelTupleFirst) {
+        expect.fail('Expected secondLevelTupleFirst to be defined');
+        return;
+    }
+
+    if (!guardTuple(secondLevelTupleFirst)) {
+        expect.fail('Expected secondLevelTupleFirst to be a tuple type');
+        return;
+    }
+
+    expect(secondLevelTupleFirst.items).toBeDefined();
 });

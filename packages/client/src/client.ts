@@ -5783,28 +5783,17 @@ const components = {
     }
 };
 /**
- * Single error class for all parsing errors in the TonAPI SDK
- *
- * Provides type-safe error handling with centralized message formatting.
- * Use parsingType property to distinguish between Address, Cell, BigInt, and TupleItem errors.
- *
- * @example
- * ```typescript
- * if (error.cause instanceof TonApiParsingError) {
- *   console.log('Parsing type:', error.cause.parsingType); // 'Address', 'Cell', 'BigInt', 'TupleItem'
- *   console.log('Error message:', error.cause.formatMessage());
- * }
- * ```
+ * Base abstract error class for all TonAPI SDK errors
+ * Not exported - only used for internal inheritance
  */
-export class TonApiParsingError extends Error {
-    readonly type = 'parsing_error' as const;
-    readonly parsingType: string;
-    readonly originalCause: unknown;
+abstract class TonApiErrorAbstract extends Error {
+    abstract readonly type: string;
+    readonly message: string;
+    readonly originalCause?: unknown;
 
-    constructor(parsingType: string, message: string, cause: unknown) {
+    constructor(message: string, cause?: unknown) {
         super(message);
-        this.name = 'TonApiParsingError';
-        this.parsingType = parsingType;
+        this.message = message;
         this.originalCause = cause;
 
         // Maintain proper stack trace in V8
@@ -5812,37 +5801,172 @@ export class TonApiParsingError extends Error {
             Error.captureStackTrace(this, this.constructor);
         }
     }
+}
 
-    /**
-     * Format error message for end users
-     * Centralized formatting - change here to change everywhere
-     */
-    formatMessage(): string {
-        return `SDK parsing error [${this.parsingType}]: ${this.message}`;
+/**
+ * HTTP error returned by TonAPI
+ * Represents 4xx and 5xx responses from the API
+ *
+ * @example
+ * ```typescript
+ * if (error instanceof TonApiHttpError) {
+ *   console.log('HTTP Status:', error.status);
+ *   console.log('Error code:', error.code);
+ *   console.log('Request URL:', error.url);
+ * }
+ * ```
+ */
+export class TonApiHttpError extends TonApiErrorAbstract {
+    readonly type = 'http_error' as const;
+    readonly status: number;
+    readonly code?: string;
+    readonly url: string;
+
+    constructor(status: number, message: string, url: string, code?: string, cause?: unknown) {
+        const formattedMessage = code
+            ? `HTTP ${status} [${code}]: ${message}`
+            : `HTTP ${status}: ${message}`;
+        super(formattedMessage, cause);
+        this.name = 'TonApiHttpError';
+        this.status = status;
+        this.url = url;
+        this.code = code;
     }
 }
 
-type ComponentRef = keyof typeof components;
+/**
+ * Network error (connection failed, timeout, etc.)
+ * Thrown when the HTTP request itself fails, not when it returns an error response
+ *
+ * @example
+ * ```typescript
+ * if (error instanceof TonApiNetworkError) {
+ *   console.log('Network error:', error.message);
+ *   console.log('Cause:', error.originalCause);
+ * }
+ * ```
+ */
+export class TonApiNetworkError extends TonApiErrorAbstract {
+    readonly type = 'network_error' as const;
 
-export interface TonApiError {
-    /** Human-readable error message */
-    message: string;
-
-    /** Error type for programmatic handling */
-    type?: 'http_error' | 'network_error' | 'parsing_error';
-
-    /** Error code from API response (for http_error) */
-    code?: string;
-
-    /** HTTP status code (for http_error) */
-    status?: number;
-
-    /** Request URL for debugging */
-    url?: string;
-
-    /** Original error/response for advanced debugging */
-    cause?: unknown;
+    constructor(message: string, cause: unknown) {
+        const formattedMessage = `Network error: ${message}`;
+        super(formattedMessage, cause);
+        this.name = 'TonApiNetworkError';
+    }
 }
+
+/**
+ * Parsing error for Address, Cell, BigInt, or TupleItem
+ * Thrown when SDK fails to parse data returned from TonAPI
+ *
+ * @example
+ * ```typescript
+ * if (error instanceof TonApiParsingError) {
+ *   console.log('Parsing type:', error.parsingType); // 'Address', 'Cell', 'BigInt', 'TupleItem'
+ *   console.log('Error message:', error.message);
+ *   console.log('Original response:', error.response);
+ * }
+ * ```
+ */
+export class TonApiParsingError extends TonApiErrorAbstract {
+    readonly type = 'parsing_error' as const;
+    readonly parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem';
+    readonly response: unknown;
+
+    constructor(
+        parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem',
+        message: string,
+        cause: unknown,
+        response: unknown
+    ) {
+        const formattedMessage = `SDK parsing error [${parsingType}]: ${message}`;
+        super(formattedMessage, cause);
+        this.name = 'TonApiParsingError';
+        this.parsingType = parsingType;
+        this.response = response;
+
+        // Log to console with request to report issue
+        console.error(
+            `[TonAPI SDK] Parsing error occurred. This might be a bug in the SDK.\n` +
+                `Please report this issue at: https://github.com/tonkeeper/tonapi-js/issues\n` +
+                `Error details:`,
+            {
+                type: parsingType,
+                message: message,
+                response: response
+            }
+        );
+    }
+}
+
+/**
+ * Unknown error type
+ * Thrown when an error occurs that doesn't fit other categories
+ *
+ * @example
+ * ```typescript
+ * if (error instanceof TonApiUnknownError) {
+ *   console.log('Unknown error:', error.message);
+ *   console.log('Cause:', error.originalCause);
+ * }
+ * ```
+ */
+export class TonApiUnknownError extends TonApiErrorAbstract {
+    readonly type = 'unknown_error' as const;
+
+    constructor(message: string, cause: unknown) {
+        const formattedMessage = `Unknown error: ${message}`;
+        super(formattedMessage, cause);
+        this.name = 'TonApiUnknownError';
+    }
+}
+
+/**
+ * Union type of all possible TonAPI errors
+ * Use this type in Result<T> and for error handling
+ *
+ * @example
+ * ```typescript
+ * const { data, error } = await getAccount(address);
+ *
+ * if (error) {
+ *   // Type-safe instanceof checks
+ *   if (error instanceof TonApiHttpError) {
+ *     console.log(`HTTP ${error.status}: ${error.message}`);
+ *   } else if (error instanceof TonApiNetworkError) {
+ *     console.log(`Network error: ${error.message}`);
+ *   } else if (error instanceof TonApiParsingError) {
+ *     console.log(`Parsing ${error.parsingType} failed: ${error.message}`);
+ *   } else if (error instanceof TonApiUnknownError) {
+ *     console.log(`Unknown error: ${error.message}`);
+ *   }
+ *
+ *   // Or use discriminated union
+ *   switch (error.type) {
+ *     case 'http_error':
+ *       console.log(error.status, error.code, error.url);
+ *       break;
+ *     case 'network_error':
+ *       console.log(error.originalCause);
+ *       break;
+ *     case 'parsing_error':
+ *       console.log(error.parsingType);
+ *       break;
+ *     case 'unknown_error':
+ *       console.log(error.originalCause);
+ *       break;
+ *   }
+ * }
+ * ```
+ */
+export type TonApiError =
+    | TonApiHttpError
+    | TonApiNetworkError
+    | TonApiParsingError
+    | TonApiUnknownError;
+
+type ComponentRef = keyof typeof components;
 
 export type Result<T> = { data: T; error: null } | { data: null; error: TonApiError };
 
@@ -5854,12 +5978,12 @@ function camelToSnake(camel: string): string {
     return camel.replace(/([A-Z])/g, match => `_${match.toLowerCase()}`);
 }
 
-function cellParse(src: string): Cell {
+function cellParse(src: string, response: unknown): Cell {
     try {
         return Cell.fromHex(src);
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        throw new TonApiParsingError('Cell', msg, e);
+        throw new TonApiParsingError('Cell', msg, e, response);
     }
 }
 
@@ -5872,18 +5996,14 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
         .then(obj => {
             try {
                 // Parse and transform response data
-                const data = prepareResponseData<U>(obj, orSchema);
+                const data = prepareResponseData<U>(obj, orSchema, obj);
                 return { data, error: null } as Result<U>;
             } catch (parseError: unknown) {
-                // Handle our custom parsing errors with centralized formatting
+                // Handle our custom parsing errors - return the error instance directly
                 if (parseError instanceof TonApiParsingError) {
                     return {
                         data: null,
-                        error: {
-                            message: parseError.formatMessage(), // ✨ Centralized formatting!
-                            type: 'parsing_error',
-                            cause: parseError
-                        }
+                        error: parseError
                     } as Result<U>;
                 }
 
@@ -5893,13 +6013,10 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
                         ? `SDK parsing error: ${parseError.message}`
                         : 'SDK parsing error: Unknown error';
 
+                // Create a generic parsing error for unexpected cases
                 return {
                     data: null,
-                    error: {
-                        message,
-                        type: 'parsing_error',
-                        cause: parseError
-                    }
+                    error: new TonApiParsingError('Cell', message, parseError, obj)
                 } as Result<U>;
             }
         })
@@ -5908,18 +6025,14 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
             if (response instanceof Error) {
                 return {
                     data: null,
-                    error: {
-                        message: response.message || 'Network error',
-                        type: 'network_error',
-                        cause: response
-                    }
+                    error: new TonApiNetworkError(response.message || 'Network error', response)
                 } as Result<U>;
             }
 
             // HTTP error with response
             if (response && typeof response === 'object' && response.status !== undefined) {
                 const status = response.status;
-                const url = response.url;
+                const url = response.url || '';
                 let message: string = 'Request failed';
                 let code: string | undefined = undefined;
 
@@ -5940,36 +6053,28 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
 
                 return {
                     data: null,
-                    error: {
-                        message,
-                        type: 'http_error',
-                        code,
-                        status,
-                        url,
-                        cause: response
-                    }
+                    error: new TonApiHttpError(status, message, url, code, response)
                 } as Result<U>;
             }
 
             // Unknown error
             return {
                 data: null,
-                error: {
-                    message: 'Unknown error occurred',
-                    cause: response
-                }
+                error: new TonApiUnknownError('Unknown error occurred', response)
             } as Result<U>;
         });
 }
 
-function prepareResponseData<U>(obj: any, orSchema?: any): U {
+function prepareResponseData<U>(obj: any, orSchema?: any, originalResponse: unknown = obj): U {
     const ref = (orSchema && orSchema.$ref) as ComponentRef | undefined;
     const schema = ref ? components[ref] : orSchema;
 
     if (Array.isArray(obj)) {
         const itemSchema = schema && schema.items;
 
-        return obj.map(item => prepareResponseData(item, itemSchema)) as unknown as U;
+        return obj.map(item =>
+            prepareResponseData(item, itemSchema, originalResponse)
+        ) as unknown as U;
     } else if (schema) {
         if (schema.type === 'string') {
             if (schema.format === 'address') {
@@ -5977,12 +6082,12 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                     return Address.parse(obj as string) as U;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
-                    throw new TonApiParsingError('Address', msg, e);
+                    throw new TonApiParsingError('Address', msg, e, originalResponse);
                 }
             }
 
             if (schema.format === 'cell') {
-                return obj && (cellParse(obj as string) as U);
+                return obj && (cellParse(obj as string, originalResponse) as U);
             }
 
             if (schema['x-js-format'] === 'bigint') {
@@ -5990,7 +6095,7 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                     return BigInt(obj as string) as U;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
-                    throw new TonApiParsingError('BigInt', msg, e);
+                    throw new TonApiParsingError('BigInt', msg, e, originalResponse);
                 }
             }
 
@@ -6000,7 +6105,7 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                     return obj && (Cell.fromBase64(obj as string) as U);
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
-                    throw new TonApiParsingError('Cell', msg, e);
+                    throw new TonApiParsingError('Cell', msg, e, originalResponse);
                 }
             }
         }
@@ -6011,7 +6116,7 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                     return BigInt(obj as number) as U;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
-                    throw new TonApiParsingError('BigInt', msg, e);
+                    throw new TonApiParsingError('BigInt', msg, e, originalResponse);
                 }
             }
 
@@ -6026,7 +6131,7 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                         return {
                             type: 'tuple',
                             items: obj.tuple.map((item: any) =>
-                                prepareResponseData(item, itemSchema)
+                                prepareResponseData(item, itemSchema, originalResponse)
                             )
                         } as U;
                     case 'num':
@@ -6037,12 +6142,12 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                     case 'cell':
                         return {
                             type: 'cell',
-                            cell: cellParse(obj.cell as string)
+                            cell: cellParse(obj.cell as string, originalResponse)
                         } as U;
                     case 'slice':
                         return {
                             type: 'slice',
-                            slice: cellParse(obj.slice as string)
+                            slice: cellParse(obj.slice as string, originalResponse)
                         } as U;
                     case 'null':
                         return {
@@ -6056,7 +6161,8 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                         throw new TonApiParsingError(
                             'TupleItem',
                             `Unknown tuple item type: ${obj.type}`,
-                            obj
+                            obj,
+                            originalResponse
                         );
                 }
             }
@@ -6069,7 +6175,7 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
             (acc, key) => {
                 if (!schema) {
                     // If schema is undefined, do not convert keys
-                    acc[key] = prepareResponseData(obj[key], undefined);
+                    acc[key] = prepareResponseData(obj[key], undefined, originalResponse);
                     return acc;
                 }
 
@@ -6082,7 +6188,7 @@ function prepareResponseData<U>(obj: any, orSchema?: any): U {
                 // Use the specific property schema or the additionalProperties schema
                 const propertySchema = isDefinedProperty ? objSchema : schema.additionalProperties;
 
-                acc[camelCaseKey] = prepareResponseData(obj[key], propertySchema);
+                acc[camelCaseKey] = prepareResponseData(obj[key], propertySchema, originalResponse);
                 return acc;
             },
             {} as Record<string, unknown>
