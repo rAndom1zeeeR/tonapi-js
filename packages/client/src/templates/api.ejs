@@ -91,8 +91,21 @@ const components =  <%~ componentsJson %>
 let httpClient: HttpClient | null = null;
 
 /**
- * Initialize the API client with configuration
- * @param apiConfig - Configuration for the API client (baseUrl, apiKey, etc.)
+ * Initialize the API client with configuration.
+ * Should be called once at application startup.
+ *
+ * @param apiConfig - Configuration for the API client
+ * @param apiConfig.baseUrl - API base URL
+ * @param apiConfig.apiKey - API authentication key
+ * @param apiConfig.baseApiParams - Additional request parameters
+ *
+ * @example
+ * ```typescript
+ * initClient({
+ *   baseUrl: 'https://tonapi.io',
+ *   apiKey: process.env.TON_API_KEY
+ * });
+ * ```
  */
 export function initClient(apiConfig: ApiConfig = {}): void {
   httpClient = new HttpClient(apiConfig);
@@ -107,17 +120,6 @@ function getHttpClient(): HttpClient {
     httpClient = new HttpClient();
   }
   return httpClient;
-}
-
-/**
- * Update the API client configuration
- * @param apiConfig - Configuration to update
- */
-export function updateClient(apiConfig: Partial<ApiConfig>): void {
-  const client = getHttpClient();
-  if (apiConfig.baseUrl !== undefined) client.baseUrl = apiConfig.baseUrl;
-  if (apiConfig.apiKey !== undefined) client.setApiKey(apiConfig.apiKey);
-  if (apiConfig.fetch !== undefined) client.setCustomFetch(apiConfig.fetch);
 }
 
 <% if (routes.outOfModule) { %>

@@ -228,29 +228,6 @@ class HttpClient {
         }
     }
 
-    public setApiKey = (apiKey: string | undefined) => {
-        if (apiKey) {
-            this.baseApiParams = {
-                ...this.baseApiParams,
-                headers: {
-                    ...(this.baseApiParams.headers || {}),
-                    Authorization: `Bearer ${apiKey}`
-                } as HeadersInit
-            };
-        } else {
-            const headers = { ...(this.baseApiParams.headers || {}) } as Record<string, string>;
-            delete headers['Authorization'];
-            this.baseApiParams = {
-                ...this.baseApiParams,
-                headers: headers as HeadersInit
-            };
-        }
-    }
-
-    public setCustomFetch = (fetchFn: typeof fetch | undefined) => {
-        this.providedFetch = fetchFn ?? null;
-    }
-
     public request = async <T = any, E = any>({
         body,
         secure,
