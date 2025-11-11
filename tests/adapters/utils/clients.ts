@@ -1,15 +1,16 @@
 import { TonClient } from '@ton/ton';
 import { ContractAdapter } from '@ton-api/ton-adapter';
-import { TonApiClient } from '@ton-api/client';
+import { initClient } from '@ton-api/client';
 
 require('dotenv').config();
 
-const ta = new TonApiClient({
+// Initialize client for TonApi
+initClient({
     baseUrl: 'https://tonapi.io',
     apiKey: process.env.TONAPI_API_KEY
 });
 
-export const clientTonApi = new ContractAdapter(ta); // Create an adapter
+export const clientTonApi = new ContractAdapter(); // Create an adapter
 
 export const getTonCenterClient = () => {
     if (!process.env.TONCENTER_API_KEY) {

@@ -1,17 +1,17 @@
 import { WalletContractV5R1, Address, beginCell, internal, toNano, SendMode } from '@ton/ton';
 import { mnemonicToPrivateKey } from '@ton/crypto';
 
-import { TonApiClient } from '@ton-api/client';
+import { initClient, execGetMethodForBlockchainAccount } from '@ton-api/client';
 import { ContractAdapter } from '@ton-api/ton-adapter';
 
 // Initialize TonApi client
-const ta = new TonApiClient({
+initClient({
     baseUrl: 'https://tonapi.io',
     apiKey: 'YOUR_API_KEY', // Optional, improves request limits and access
 });
 
 // Create an adapter for interacting with contracts
-const adapter = new ContractAdapter(ta);
+const adapter = new ContractAdapter();
 
 // Base gas fee required for the jetton transfer
 const BASE_JETTON_SEND_AMOUNT = toNano(0.05);
@@ -32,7 +32,7 @@ const wallet = WalletContractV5R1.create({ workchain: 0, publicKey: keyPair.publ
 const contract = adapter.open(wallet); // Open the wallet contract using the adapter
 
 // Get the sender's jetton wallet address from the jetton master contract
-const { data: jettonWalletAddressResult, error } = await ta.blockchain.execGetMethodForBlockchainAccount(
+const { data: jettonWalletAddressResult, error } = await execGetMethodForBlockchainAccount(
     jettonMaster,
     'get_wallet_address',
     { args: [wallet.address.toRawString()] }

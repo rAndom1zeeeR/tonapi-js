@@ -1,8 +1,9 @@
 import { Address, Contract, ContractProvider, TupleItem } from '@ton/core';
 import { WalletContractV4 } from '@ton/ton';
-import { TonApiClient } from '@ton-api/client';
+import { initClient, execGetMethodForBlockchainAccount } from '@ton-api/client';
 
-const ta = new TonApiClient({
+// Initialize client once at module load time
+initClient({
     baseUrl: 'https://tonapi.io'
 });
 
@@ -37,7 +38,7 @@ export class WalletItem implements Contract {
     }
 
     static async createFromAddress(address: Address) {
-        const { data: accountData, error } = await ta.blockchain.execGetMethodForBlockchainAccount(
+        const { data: accountData, error } = await execGetMethodForBlockchainAccount(
             address,
             'get_public_key'
         );

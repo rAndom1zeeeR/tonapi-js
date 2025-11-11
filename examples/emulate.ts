@@ -9,10 +9,10 @@ import {
     storeMessage
 } from '@ton/ton';
 import { mnemonicNew, mnemonicToPrivateKey } from '@ton/crypto';
-import { TonApiClient } from '@ton-api/client';
+import { initClient, getAccountSeqno, getAccountPublicKey, emulateMessageToTrace } from '@ton-api/client';
 
 // if you need to send lots of requests in parallel, make sure you use a tonapi token.
-const ta = new TonApiClient({
+initClient({
     baseUrl: 'https://tonapi.io',
     apiKey: 'YOUR_API_KEY'
 });
@@ -22,13 +22,13 @@ const senderAddress = Address.parse('UQAQxxpzxmEVU0Lu8U0zNTxBzXIWPvo263TIN1OQM9Y
 const recipientAddress = Address.parse('UQDNzlh0XSZdb5_Qrlx5QjyZHVAO74v5oMeVVrtF_5Vt1rIt');
 
 // Get wallet's seqno and public key
-const { data: seqnoData, error: seqnoError } = await ta.wallet.getAccountSeqno(senderAddress);
+const { data: seqnoData, error: seqnoError } = await getAccountSeqno(senderAddress);
 if (seqnoError) {
     console.error('Error getting seqno:', seqnoError.message);
     process.exit(1);
 }
 
-const { data: publicKeyData, error: publicKeyError } = await ta.accounts.getAccountPublicKey(senderAddress);
+const { data: publicKeyData, error: publicKeyError } = await getAccountPublicKey(senderAddress);
 if (publicKeyError) {
     console.error('Error getting public key:', publicKeyError.message);
     process.exit(1);
@@ -85,7 +85,7 @@ const bocExternalMessage = beginCell()
     .endCell();
 
 // Emulate transaction
-const { data: emulateTrace, error: emulateError } = await ta.emulation.emulateMessageToTrace(
+const { data: emulateTrace, error: emulateError } = await emulateMessageToTrace(
     { boc: bocExternalMessage },
     { ignore_signature_check: true } // Ignore signature for execute message from other account
 );

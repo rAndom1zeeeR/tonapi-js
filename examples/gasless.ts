@@ -11,16 +11,16 @@ import {
     storeMessageRelaxed
 } from '@ton/ton';
 
-import { TonApiClient } from '@ton-api/client';
+import { initClient, execGetMethodForBlockchainAccount, gaslessConfig, gaslessEstimate, gaslessSend, TonApiHttpError } from '@ton-api/client';
 import { ContractAdapter } from '@ton-api/ton-adapter';
 
 // if you need to send lots of requests in parallel, make sure you use a tonapi token.
-const ta = new TonApiClient({
+initClient({
     baseUrl: 'https://tonapi.io',
     apiKey: 'YOUR_API_KEY'
 });
 
-const provider = new ContractAdapter(ta);
+const provider = new ContractAdapter();
 
 const OP_CODES = {
     TK_RELAYER_FEE: 0x878da6e3,
@@ -48,7 +48,7 @@ const contract = provider.open(wallet);
 console.log('Wallet address:', wallet.address.toString());
 
 const { data: jettonWalletAddressResult, error: getWalletError } =
-    await ta.blockchain.execGetMethodForBlockchainAccount(usdtMaster, 'get_wallet_address', {
+    await execGetMethodForBlockchainAccount(usdtMaster, 'get_wallet_address', {
         args: [wallet.address.toRawString()]
     });
 
@@ -92,7 +92,7 @@ const messageToEstimate = beginCell()
 // we send a single message containing a transfer from our wallet to a desired destination.
 // as a result of estimation, TonAPI returns a list of messages that we need to sign.
 // the first message is a fee transfer to the relay address, the second message is our original transfer.
-const { data: params, error: estimateError } = await ta.gasless.gaslessEstimate(usdtMaster, {
+const { data: params, error: estimateError } = await gaslessEstimate(usdtMaster, {
     walletAddress: wallet.address,
     walletPublicKey: keyPair.publicKey.toString('hex'),
     messages: [{ boc: messageToEstimate }]
@@ -136,19 +136,23 @@ const extMessage = beginCell()
     .endCell();
 
 // Send a gasless transfer
-const { data: sendResult, error: sendError } = await ta.gasless.gaslessSend({
+const { data: sendResult, error: sendError } = await gaslessSend({
     walletPublicKey: keyPair.publicKey.toString('hex'),
     boc: extMessage
 });
 
 if (sendError) {
-    console.error('Error sending gasless transfer:', sendError.message, sendError.status);
+    if (sendError instanceof TonApiHttpError) {
+        console.error('Error sending gasless transfer:', sendError.message, 'Status:', sendError.status);
+    } else {
+        console.error('Error sending gasless transfer:', sendError.message);
+    }
 } else {
     console.log('A gasless transfer sent!');
 }
 
 async function printConfigAndReturnRelayAddress(): Promise<Address> {
-    const { data: cfg, error } = await ta.gasless.gaslessConfig();
+    const { data: cfg, error } = await gaslessConfig();
 
     if (error) {
         console.error('Error getting gasless config:', error.message);
