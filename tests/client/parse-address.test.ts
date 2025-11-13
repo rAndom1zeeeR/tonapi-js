@@ -1,6 +1,11 @@
 import { Address } from '@ton/core';
 import { ta } from './utils/client';
-import { getAccounts, getBlockchainRawAccount } from './__mock__/address';
+import {
+    getAccounts,
+    getBlockchainRawAccount,
+    getAccountEvent,
+    getAccountEventWithEmptyNft
+} from './__mock__/address';
 import { vi, test, expect, afterEach } from 'vitest';
 import { mockFetch } from './utils/mockFetch';
 
@@ -44,4 +49,35 @@ test('Address in request body test', async () => {
             })
         })
     );
+});
+
+test('MaybeAddress with valid address', async () => {
+    mockFetch(getAccountEvent);
+
+    const data = await ta.getAccountEvent(
+        Address.parse('0:009d03ddede8c2620a72f999d03d5888102250a214bf574a29ff64df80162168'),
+        'test-event-id'
+    );
+
+    expect(data).toBeDefined();
+    expect(data.actions[0]).toBeDefined();
+    const nftTransfer = data.actions[0]?.NftItemTransfer;
+    expect(nftTransfer).toBeDefined();
+    expect(nftTransfer?.nft).toBeInstanceOf(Address);
+    expect(Address.isAddress(nftTransfer?.nft)).toBe(true);
+});
+
+test('MaybeAddress with empty string', async () => {
+    mockFetch(getAccountEventWithEmptyNft);
+
+    const data = await ta.getAccountEvent(
+        Address.parse('0:009d03ddede8c2620a72f999d03d5888102250a214bf574a29ff64df80162168'),
+        'test-event-id-empty'
+    );
+
+    expect(data).toBeDefined();
+    expect(data.actions[0]).toBeDefined();
+    const nftTransfer = data.actions[0]?.NftItemTransfer;
+    expect(nftTransfer).toBeDefined();
+    expect(nftTransfer?.nft).toBeNull();
 });
