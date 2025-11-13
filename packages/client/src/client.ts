@@ -16,10 +16,10 @@ export interface Error {
 
 export interface AccountAddress {
     /**
-     * @format address
+     * @format maybe-address
      * @example "0:10C1073837B93FDAAD594284CE8B8EFF7B9CF25427440EB2FC682762E1471365"
      */
-    address: Address;
+    address: Address | null;
     /**
      * Display name. Data collected from different sources like moderation lists, dns, collections names and over.
      * @example "Ton foundation"
@@ -1952,8 +1952,11 @@ export interface SetSignatureAllowedAction {
 export interface NftItemTransferAction {
     sender?: AccountAddress;
     recipient?: AccountAddress;
-    /** @example "" */
-    nft: string;
+    /**
+     * @format maybe-address
+     * @example ""
+     */
+    nft: Address | null;
     /**
      * @example "Hi! This is your salary.
      * From accounting with love."
@@ -2340,10 +2343,10 @@ export interface Subscription {
     nextChargeAt: number;
     metadata: Metadata;
     /**
-     * @format address
+     * @format maybe-address
      * @example "0:dea8f638b789172ce36d10a20318125e52c649aa84893cd77858224fe2b9b0ee"
      */
-    address?: Address;
+    address?: Address | null;
     beneficiary?: AccountAddress;
     admin?: AccountAddress;
 }
@@ -2415,10 +2418,10 @@ export interface DomainInfo {
 export interface DnsRecord {
     wallet?: WalletDNS;
     /**
-     * @format address
+     * @format maybe-address
      * @example "0:da6b1b6663a0e4d18cc8574ccd9db5296e367dd9324706f3bbd9eb1cd2caf0bf"
      */
-    nextResolver?: Address;
+    nextResolver?: Address | null;
     sites: string[];
     /**
      * tonstorage bag id
@@ -3872,7 +3875,7 @@ const components = {
         type: 'object',
         required: ['address', 'is_scam', 'is_wallet'],
         properties: {
-            address: { type: 'string', format: 'address' },
+            address: { type: 'string', format: 'maybe-address' },
             name: { type: 'string' },
             is_scam: { type: 'boolean' },
             icon: { type: 'string' },
@@ -5451,7 +5454,7 @@ const components = {
         properties: {
             sender: { $ref: '#/components/schemas/AccountAddress' },
             recipient: { $ref: '#/components/schemas/AccountAddress' },
-            nft: { type: 'string' },
+            nft: { type: 'string', format: 'maybe-address' },
             comment: { type: 'string' },
             encrypted_comment: { $ref: '#/components/schemas/EncryptedComment' },
             payload: { type: 'string' },
@@ -5752,7 +5755,7 @@ const components = {
             wallet: { $ref: '#/components/schemas/AccountAddress' },
             next_charge_at: { type: 'integer', format: 'int64' },
             metadata: { $ref: '#/components/schemas/Metadata' },
-            address: { type: 'string', format: 'address' },
+            address: { type: 'string', format: 'maybe-address' },
             beneficiary: { $ref: '#/components/schemas/AccountAddress' },
             admin: { $ref: '#/components/schemas/AccountAddress' }
         }
@@ -5816,7 +5819,7 @@ const components = {
         required: ['sites'],
         properties: {
             wallet: { $ref: '#/components/schemas/WalletDNS' },
-            next_resolver: { type: 'string', format: 'address' },
+            next_resolver: { type: 'string', format: 'maybe-address' },
             sites: { type: 'array', items: { type: 'string' } },
             storage: { type: 'string' }
         }
@@ -6444,11 +6447,11 @@ export class TonApiNetworkError extends TonApiErrorAbstract {
  */
 export class TonApiParsingError extends TonApiErrorAbstract {
     readonly type = 'parsing_error' as const;
-    readonly parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown';
+    readonly parsingType: 'Address' | 'MaybeAddress' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown';
     readonly response: unknown;
 
     constructor(
-        parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown',
+        parsingType: 'Address' | 'MaybeAddress' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown',
         message: string,
         cause: unknown,
         response: unknown
@@ -6655,6 +6658,18 @@ function prepareResponseData<U>(obj: any, orSchema?: any, originalResponse: unkn
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
                     throw new TonApiParsingError('Address', msg, e, originalResponse);
+                }
+            }
+
+            if (schema.format === 'maybe-address') {
+                if (!obj || obj === '') {
+                    return null as U;
+                }
+                try {
+                    return Address.parse(obj as string) as U;
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    throw new TonApiParsingError('MaybeAddress', msg, e, originalResponse);
                 }
             }
 

@@ -87,10 +87,10 @@ export class TonApiNetworkError extends TonApiErrorAbstract {
  */
 export class TonApiParsingError extends TonApiErrorAbstract {
   readonly type = 'parsing_error' as const;
-  readonly parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown';
+  readonly parsingType: 'Address' | 'MaybeAddress' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown';
   readonly response: unknown;
 
-  constructor(parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown', message: string, cause: unknown, response: unknown) {
+  constructor(parsingType: 'Address' | 'MaybeAddress' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown', message: string, cause: unknown, response: unknown) {
     const formattedMessage = `SDK parsing error [${parsingType}]: ${message}`;
     super(formattedMessage, cause);
     this.name = 'TonApiParsingError';

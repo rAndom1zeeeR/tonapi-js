@@ -132,6 +132,18 @@ function prepareResponseData<U>(obj: any, orSchema?: any, originalResponse: unkn
         }
       }
 
+      if (schema.format === "maybe-address") {
+        if (!obj || obj === '') {
+          return null as U;
+        }
+        try {
+          return Address.parse(obj as string) as U;
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          throw new TonApiParsingError('MaybeAddress', msg, e, originalResponse);
+        }
+      }
+
       if (schema.format === "cell") {
         return obj && (cellParse(obj as string, originalResponse) as U);
       }

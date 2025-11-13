@@ -201,7 +201,8 @@ const generateApiParams: GenerateApiParams = {
             cell: 'Cell',
             bigint: 'bigint',
             'cell-base64': 'Cell',
-            'tuple-item': 'TupleItem'
+            'tuple-item': 'TupleItem',
+            'maybe-address': 'Address | null'
         }
     }),
     hooks: {
