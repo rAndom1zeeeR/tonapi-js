@@ -6543,6 +6543,18 @@ type ComponentRef = keyof typeof components;
 
 export type Result<T> = { data: T; error: null } | { data: null; error: TonApiError };
 
+/**
+ * Conditional return type for Advanced API methods with throwOnError support
+ * @template T - The data type returned on success
+ * @template ThrowOnError - Boolean flag determining if errors should be thrown
+ *
+ * When ThrowOnError is true: returns Promise<T> (throws on error)
+ * When ThrowOnError is false: returns Promise<Result<T>> (returns {data, error})
+ */
+export type MethodResult<T, ThrowOnError extends boolean = false> = ThrowOnError extends true
+    ? Promise<T>
+    : Promise<Result<T>>;
+
 function snakeToCamel(snakeCaseString: string): string {
     return snakeCaseString.replace(/(_\w)/g, match => match[1]?.toUpperCase() ?? '');
 }
@@ -10371,12 +10383,27 @@ function getDefaultClient(): TonApiClient {
  * @name GetOpenapiJson
  * @request GET:/v2/openapi.json
  */
-export const getOpenapiJson = async (params: RequestParams = {}) => {
+export const getOpenapiJson = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getOpenapiJson(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getOpenapiJson(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10387,12 +10414,27 @@ export const getOpenapiJson = async (params: RequestParams = {}) => {
  * @name GetOpenapiYml
  * @request GET:/v2/openapi.yml
  */
-export const getOpenapiYml = async (params: RequestParams = {}) => {
+export const getOpenapiYml = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getOpenapiYml(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getOpenapiYml(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10403,12 +10445,27 @@ export const getOpenapiYml = async (params: RequestParams = {}) => {
  * @name Status
  * @request GET:/v2/status
  */
-export const status = async (params: RequestParams = {}) => {
+export const status = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().status(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.status(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10419,12 +10476,30 @@ export const status = async (params: RequestParams = {}) => {
  * @name AddressParse
  * @request GET:/v2/address/{account_id}/parse
  */
-export const addressParse = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const addressParse = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().addressParse(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.addressParse(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10435,20 +10510,33 @@ export const addressParse = async (accountId_Address: Address, params: RequestPa
  * @name GetReducedBlockchainBlocks
  * @request GET:/v2/blockchain/reduced/blocks
  */
-export const getReducedBlockchainBlocks = async (
+export const getReducedBlockchainBlocks = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
     query: {
         /** @format int64 */
         from: number;
         /** @format int64 */
         to: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getReducedBlockchainBlocks(query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getReducedBlockchainBlocks(options.query, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10459,12 +10547,30 @@ export const getReducedBlockchainBlocks = async (
  * @name GetBlockchainBlock
  * @request GET:/v2/blockchain/blocks/{block_id}
  */
-export const getBlockchainBlock = async (blockId: string, params: RequestParams = {}) => {
+export const getBlockchainBlock = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainBlock(blockId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainBlock(options.path.blockId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10475,12 +10581,33 @@ export const getBlockchainBlock = async (blockId: string, params: RequestParams 
  * @name DownloadBlockchainBlockBoc
  * @request GET:/v2/blockchain/blocks/{block_id}/boc
  */
-export const downloadBlockchainBlockBoc = async (blockId: string, params: RequestParams = {}) => {
+export const downloadBlockchainBlockBoc = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().downloadBlockchainBlockBoc(blockId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.downloadBlockchainBlockBoc(
+            options.path.blockId,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10491,18 +10618,35 @@ export const downloadBlockchainBlockBoc = async (blockId: string, params: Reques
  * @name GetBlockchainMasterchainShards
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/shards
  */
-export const getBlockchainMasterchainShards = async (
-    masterchainSeqno: number,
-    params: RequestParams = {}
-) => {
+export const getBlockchainMasterchainShards = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        masterchainSeqno: number;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainMasterchainShards(
-            masterchainSeqno,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainMasterchainShards(
+            options.path.masterchainSeqno,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10513,18 +10657,35 @@ export const getBlockchainMasterchainShards = async (
  * @name GetBlockchainMasterchainBlocks
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/blocks
  */
-export const getBlockchainMasterchainBlocks = async (
-    masterchainSeqno: number,
-    params: RequestParams = {}
-) => {
+export const getBlockchainMasterchainBlocks = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        masterchainSeqno: number;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainMasterchainBlocks(
-            masterchainSeqno,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainMasterchainBlocks(
+            options.path.masterchainSeqno,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10535,18 +10696,35 @@ export const getBlockchainMasterchainBlocks = async (
  * @name GetBlockchainMasterchainTransactions
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/transactions
  */
-export const getBlockchainMasterchainTransactions = async (
-    masterchainSeqno: number,
-    params: RequestParams = {}
-) => {
+export const getBlockchainMasterchainTransactions = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        masterchainSeqno: number;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainMasterchainTransactions(
-            masterchainSeqno,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainMasterchainTransactions(
+            options.path.masterchainSeqno,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10557,18 +10735,33 @@ export const getBlockchainMasterchainTransactions = async (
  * @name GetBlockchainConfigFromBlock
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config
  */
-export const getBlockchainConfigFromBlock = async (
-    masterchainSeqno: number,
-    params: RequestParams = {}
-) => {
+export const getBlockchainConfigFromBlock = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        masterchainSeqno: number;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainConfigFromBlock(
-            masterchainSeqno,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainConfigFromBlock(
+            options.path.masterchainSeqno,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10579,18 +10772,35 @@ export const getBlockchainConfigFromBlock = async (
  * @name GetRawBlockchainConfigFromBlock
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config/raw
  */
-export const getRawBlockchainConfigFromBlock = async (
-    masterchainSeqno: number,
-    params: RequestParams = {}
-) => {
+export const getRawBlockchainConfigFromBlock = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        masterchainSeqno: number;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawBlockchainConfigFromBlock(
-            masterchainSeqno,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawBlockchainConfigFromBlock(
+            options.path.masterchainSeqno,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10601,15 +10811,35 @@ export const getRawBlockchainConfigFromBlock = async (
  * @name GetBlockchainBlockTransactions
  * @request GET:/v2/blockchain/blocks/{block_id}/transactions
  */
-export const getBlockchainBlockTransactions = async (
-    blockId: string,
-    params: RequestParams = {}
-) => {
+export const getBlockchainBlockTransactions = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainBlockTransactions(blockId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainBlockTransactions(
+            options.path.blockId,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10620,15 +10850,33 @@ export const getBlockchainBlockTransactions = async (
  * @name GetBlockchainTransaction
  * @request GET:/v2/blockchain/transactions/{transaction_id}
  */
-export const getBlockchainTransaction = async (
-    transactionId: string,
-    params: RequestParams = {}
-) => {
+export const getBlockchainTransaction = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        transactionId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainTransaction(transactionId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainTransaction(
+            options.path.transactionId,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10639,18 +10887,35 @@ export const getBlockchainTransaction = async (
  * @name GetBlockchainTransactionByMessageHash
  * @request GET:/v2/blockchain/messages/{msg_id}/transaction
  */
-export const getBlockchainTransactionByMessageHash = async (
-    msgId: string,
-    params: RequestParams = {}
-) => {
+export const getBlockchainTransactionByMessageHash = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        msgId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainTransactionByMessageHash(
-            msgId,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainTransactionByMessageHash(
+            options.path.msgId,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10661,12 +10926,27 @@ export const getBlockchainTransactionByMessageHash = async (
  * @name GetBlockchainValidators
  * @request GET:/v2/blockchain/validators
  */
-export const getBlockchainValidators = async (params: RequestParams = {}) => {
+export const getBlockchainValidators = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainValidators(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getBlockchainValidators(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10677,12 +10957,27 @@ export const getBlockchainValidators = async (params: RequestParams = {}) => {
  * @name GetBlockchainMasterchainHead
  * @request GET:/v2/blockchain/masterchain-head
  */
-export const getBlockchainMasterchainHead = async (params: RequestParams = {}) => {
+export const getBlockchainMasterchainHead = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainMasterchainHead(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getBlockchainMasterchainHead(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10693,15 +10988,30 @@ export const getBlockchainMasterchainHead = async (params: RequestParams = {}) =
  * @name GetBlockchainRawAccount
  * @request GET:/v2/blockchain/accounts/{account_id}
  */
-export const getBlockchainRawAccount = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getBlockchainRawAccount = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainRawAccount(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainRawAccount(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10712,8 +11022,13 @@ export const getBlockchainRawAccount = async (
  * @name GetBlockchainAccountTransactions
  * @request GET:/v2/blockchain/accounts/{account_id}/transactions
  */
-export const getBlockchainAccountTransactions = async (
-    accountId_Address: Address,
+export const getBlockchainAccountTransactions = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * omit this parameter to get last transactions
@@ -10740,18 +11055,30 @@ export const getBlockchainAccountTransactions = async (
          * @default "desc"
          */
         sort_order?: 'desc' | 'asc';
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainAccountTransactions(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getBlockchainAccountTransactions(
+            options.path.accountId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10762,9 +11089,14 @@ export const getBlockchainAccountTransactions = async (
  * @name ExecGetMethodForBlockchainAccount
  * @request GET:/v2/blockchain/accounts/{account_id}/methods/{method_name}
  */
-export const execGetMethodForBlockchainAccount = async (
-    accountId_Address: Address,
-    methodName: string,
+export const execGetMethodForBlockchainAccount = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        methodName: string;
+    };
     query?: {
         /**
          * Array of method arguments in string format. Supported value formats:
@@ -10778,19 +11110,31 @@ export const execGetMethodForBlockchainAccount = async (
          * @example ["0:9a33970f617bcd71acf2cd28357c067aa31859c02820d8f01d74c88063a8f4d8"]
          */
         args?: string[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().execGetMethodForBlockchainAccount(
-            accountId_Address,
-            methodName,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.execGetMethodForBlockchainAccount(
+            options.path.accountId,
+            options.path.methodName,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10801,24 +11145,41 @@ export const execGetMethodForBlockchainAccount = async (
  * @name ExecGetMethodWithBodyForBlockchainAccount
  * @request POST:/v2/blockchain/accounts/{account_id}/methods/{method_name}
  */
-export const execGetMethodWithBodyForBlockchainAccount = async (
-    accountId_Address: Address,
-    methodName: string,
-    data: {
+export const execGetMethodWithBodyForBlockchainAccount = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        methodName: string;
+    };
+    body: {
         args: ExecGetMethodArg[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().execGetMethodWithBodyForBlockchainAccount(
-            accountId_Address,
-            methodName,
-            data,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.execGetMethodWithBodyForBlockchainAccount(
+            options.path.accountId,
+            options.path.methodName,
+            options.body,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10829,21 +11190,34 @@ export const execGetMethodWithBodyForBlockchainAccount = async (
  * @name SendBlockchainMessage
  * @request POST:/v2/blockchain/message
  */
-export const sendBlockchainMessage = async (
-    data: {
+export const sendBlockchainMessage = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** @format cell */
         boc?: Cell;
         /** @maxItems 5 */
         batch?: Cell[];
         meta?: Record<string, string>;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().sendBlockchainMessage(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.sendBlockchainMessage(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10854,12 +11228,27 @@ export const sendBlockchainMessage = async (
  * @name GetBlockchainConfig
  * @request GET:/v2/blockchain/config
  */
-export const getBlockchainConfig = async (params: RequestParams = {}) => {
+export const getBlockchainConfig = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getBlockchainConfig(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getBlockchainConfig(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10870,12 +11259,27 @@ export const getBlockchainConfig = async (params: RequestParams = {}) => {
  * @name GetRawBlockchainConfig
  * @request GET:/v2/blockchain/config/raw
  */
-export const getRawBlockchainConfig = async (params: RequestParams = {}) => {
+export const getRawBlockchainConfig = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawBlockchainConfig(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getRawBlockchainConfig(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10886,15 +11290,33 @@ export const getRawBlockchainConfig = async (params: RequestParams = {}) => {
  * @name BlockchainAccountInspect
  * @request GET:/v2/blockchain/accounts/{account_id}/inspect
  */
-export const blockchainAccountInspect = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const blockchainAccountInspect = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().blockchainAccountInspect(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.blockchainAccountInspect(
+            options.path.accountId,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10905,12 +11327,30 @@ export const blockchainAccountInspect = async (
  * @name GetLibraryByHash
  * @request GET:/v2/blockchain/libraries/{hash}
  */
-export const getLibraryByHash = async (hash: string, params: RequestParams = {}) => {
+export const getLibraryByHash = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        hash: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getLibraryByHash(hash, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getLibraryByHash(options.path.hash, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10921,21 +11361,34 @@ export const getLibraryByHash = async (hash: string, params: RequestParams = {})
  * @name GetAccounts
  * @request POST:/v2/accounts/_bulk
  */
-export const getAccounts = async (
-    data: {
+export const getAccounts = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         accountIds: Address[];
-    },
+    };
     query?: {
         /** @example "usd" */
         currency?: string;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccounts(data, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccounts(options.body, options?.query, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10946,12 +11399,30 @@ export const getAccounts = async (
  * @name GetAccount
  * @request GET:/v2/accounts/{account_id}
  */
-export const getAccount = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const getAccount = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccount(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccount(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10962,15 +11433,30 @@ export const getAccount = async (accountId_Address: Address, params: RequestPara
  * @name AccountDnsBackResolve
  * @request GET:/v2/accounts/{account_id}/dns/backresolve
  */
-export const accountDnsBackResolve = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const accountDnsBackResolve = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().accountDnsBackResolve(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.accountDnsBackResolve(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -10981,8 +11467,11 @@ export const accountDnsBackResolve = async (
  * @name GetAccountJettonsBalances
  * @request GET:/v2/accounts/{account_id}/jettons
  */
-export const getAccountJettonsBalances = async (
-    accountId_Address: Address,
+export const getAccountJettonsBalances = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * accept ton and all possible fiat currencies, separated by commas
@@ -10994,18 +11483,30 @@ export const getAccountJettonsBalances = async (
          * @example ["custom_payload"]
          */
         supported_extensions?: string[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountJettonsBalances(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountJettonsBalances(
+            options.path.accountId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11016,9 +11517,12 @@ export const getAccountJettonsBalances = async (
  * @name GetAccountJettonBalance
  * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}
  */
-export const getAccountJettonBalance = async (
-    accountId_Address: Address,
-    jettonId_Address: Address,
+export const getAccountJettonBalance = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        jettonId: Address;
+    };
     query?: {
         /**
          * accept ton and all possible fiat currencies, separated by commas
@@ -11030,19 +11534,31 @@ export const getAccountJettonBalance = async (
          * @example ["custom_payload"]
          */
         supported_extensions?: string[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountJettonBalance(
-            accountId_Address,
-            jettonId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountJettonBalance(
+            options.path.accountId,
+            options.path.jettonId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11053,8 +11569,11 @@ export const getAccountJettonBalance = async (
  * @name GetAccountJettonsHistory
  * @request GET:/v2/accounts/{account_id}/jettons/history
  */
-export const getAccountJettonsHistory = async (
-    accountId_Address: Address,
+export const getAccountJettonsHistory = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query: {
         /**
          * omit this parameter to get last events
@@ -11068,18 +11587,30 @@ export const getAccountJettonsHistory = async (
          * @example 100
          */
         limit: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountJettonsHistory(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountJettonsHistory(
+            options.path.accountId,
+            options.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11091,9 +11622,12 @@ export const getAccountJettonsHistory = async (
  * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}/history
  * @deprecated
  */
-export const getAccountJettonHistoryById = async (
-    accountId_Address: Address,
-    jettonId_Address: Address,
+export const getAccountJettonHistoryById = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        jettonId: Address;
+    };
     query: {
         /**
          * omit this parameter to get last events
@@ -11119,19 +11653,31 @@ export const getAccountJettonHistoryById = async (
          * @example 1668436763
          */
         end_date?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountJettonHistoryById(
-            accountId_Address,
-            jettonId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountJettonHistoryById(
+            options.path.accountId,
+            options.path.jettonId,
+            options.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11142,8 +11688,11 @@ export const getAccountJettonHistoryById = async (
  * @name GetAccountNftItems
  * @request GET:/v2/accounts/{account_id}/nfts
  */
-export const getAccountNftItems = async (
-    accountId_Address: Address,
+export const getAccountNftItems = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * nft collection
@@ -11167,18 +11716,30 @@ export const getAccountNftItems = async (
          * @default false
          */
         indirect_ownership?: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountNftItems(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountNftItems(
+            options.path.accountId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11189,8 +11750,11 @@ export const getAccountNftItems = async (
  * @name GetAccountEvents
  * @request GET:/v2/accounts/{account_id}/events
  */
-export const getAccountEvents = async (
-    accountId_Address: Address,
+export const getAccountEvents = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query: {
         /**
          * Show only events that are initiated by this account
@@ -11226,14 +11790,30 @@ export const getAccountEvents = async (
          * @example 1668436763
          */
         end_date?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountEvents(accountId_Address, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountEvents(
+            options.path.accountId,
+            options.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11244,28 +11824,43 @@ export const getAccountEvents = async (
  * @name GetAccountEvent
  * @request GET:/v2/accounts/{account_id}/events/{event_id}
  */
-export const getAccountEvent = async (
-    accountId_Address: Address,
-    eventId: string,
+export const getAccountEvent = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        eventId: string;
+    };
     query?: {
         /**
          * filter actions where requested account is not real subject (for example sender or receiver jettons)
          * @default false
          */
         subject_only?: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountEvent(
-            accountId_Address,
-            eventId,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountEvent(
+            options.path.accountId,
+            options.path.eventId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11276,8 +11871,11 @@ export const getAccountEvent = async (
  * @name GetAccountTraces
  * @request GET:/v2/accounts/{account_id}/traces
  */
-export const getAccountTraces = async (
-    accountId_Address: Address,
+export const getAccountTraces = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * omit this parameter to get last events
@@ -11292,14 +11890,30 @@ export const getAccountTraces = async (
          * @example 100
          */
         limit?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountTraces(accountId_Address, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountTraces(
+            options.path.accountId,
+            options?.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11310,15 +11924,30 @@ export const getAccountTraces = async (
  * @name GetAccountSubscriptions
  * @request GET:/v2/accounts/{account_id}/subscriptions
  */
-export const getAccountSubscriptions = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getAccountSubscriptions = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountSubscriptions(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountSubscriptions(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11329,12 +11958,30 @@ export const getAccountSubscriptions = async (
  * @name ReindexAccount
  * @request POST:/v2/accounts/{account_id}/reindex
  */
-export const reindexAccount = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const reindexAccount = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().reindexAccount(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.reindexAccount(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11345,21 +11992,34 @@ export const reindexAccount = async (accountId_Address: Address, params: Request
  * @name SearchAccounts
  * @request GET:/v2/accounts/search
  */
-export const searchAccounts = async (
+export const searchAccounts = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
     query: {
         /**
          * @minLength 3
          * @maxLength 15
          */
         name: string;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().searchAccounts(query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.searchAccounts(options.query, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11370,8 +12030,11 @@ export const searchAccounts = async (
  * @name GetAccountDnsExpiring
  * @request GET:/v2/accounts/{account_id}/dns/expiring
  */
-export const getAccountDnsExpiring = async (
-    accountId_Address: Address,
+export const getAccountDnsExpiring = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * number of days before expiration
@@ -11379,18 +12042,30 @@ export const getAccountDnsExpiring = async (
          * @max 3660
          */
         period?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountDnsExpiring(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountDnsExpiring(
+            options.path.accountId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11401,15 +12076,30 @@ export const getAccountDnsExpiring = async (
  * @name GetAccountPublicKey
  * @request GET:/v2/accounts/{account_id}/publickey
  */
-export const getAccountPublicKey = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getAccountPublicKey = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountPublicKey(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountPublicKey(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11420,15 +12110,30 @@ export const getAccountPublicKey = async (
  * @name GetAccountMultisigs
  * @request GET:/v2/accounts/{account_id}/multisigs
  */
-export const getAccountMultisigs = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getAccountMultisigs = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountMultisigs(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountMultisigs(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11439,8 +12144,11 @@ export const getAccountMultisigs = async (
  * @name GetAccountDiff
  * @request GET:/v2/accounts/{account_id}/diff
  */
-export const getAccountDiff = async (
-    accountId_Address: Address,
+export const getAccountDiff = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query: {
         /**
          * @format int64
@@ -11454,14 +12162,30 @@ export const getAccountDiff = async (
          * @example 1668436763
          */
         end_date: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountDiff(accountId_Address, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountDiff(
+            options.path.accountId,
+            options.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11472,9 +12196,14 @@ export const getAccountDiff = async (
  * @name GetAccountExtraCurrencyHistoryById
  * @request GET:/v2/accounts/{account_id}/extra-currency/{id}/history
  */
-export const getAccountExtraCurrencyHistoryById = async (
-    accountId_Address: Address,
-    id: number,
+export const getAccountExtraCurrencyHistoryById = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        id: number;
+    };
     query: {
         /**
          * omit this parameter to get last events
@@ -11500,19 +12229,31 @@ export const getAccountExtraCurrencyHistoryById = async (
          * @example 1668436763
          */
         end_date?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountExtraCurrencyHistoryById(
-            accountId_Address,
-            id,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountExtraCurrencyHistoryById(
+            options.path.accountId,
+            options.path.id,
+            options.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11523,9 +12264,12 @@ export const getAccountExtraCurrencyHistoryById = async (
  * @name GetJettonAccountHistoryById
  * @request GET:/v2/jettons/{jetton_id}/accounts/{account_id}/history
  */
-export const getJettonAccountHistoryById = async (
-    accountId_Address: Address,
-    jettonId_Address: Address,
+export const getJettonAccountHistoryById = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        jettonId: Address;
+    };
     query: {
         /**
          * omit this parameter to get last events
@@ -11551,19 +12295,31 @@ export const getJettonAccountHistoryById = async (
          * @example 1668436763
          */
         end_date?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getJettonAccountHistoryById(
-            accountId_Address,
-            jettonId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getJettonAccountHistoryById(
+            options.path.accountId,
+            options.path.jettonId,
+            options.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11574,8 +12330,11 @@ export const getJettonAccountHistoryById = async (
  * @name GetAccountNftHistory
  * @request GET:/v2/accounts/{account_id}/nfts/history
  */
-export const getAccountNftHistory = async (
-    accountId_Address: Address,
+export const getAccountNftHistory = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query: {
         /**
          * omit this parameter to get last events
@@ -11589,18 +12348,30 @@ export const getAccountNftHistory = async (
          * @example 100
          */
         limit: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountNftHistory(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountNftHistory(
+            options.path.accountId,
+            options.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11611,7 +12382,8 @@ export const getAccountNftHistory = async (
  * @name GetNftCollections
  * @request GET:/v2/nfts/collections
  */
-export const getNftCollections = async (
+export const getNftCollections = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
     query?: {
         /**
          * @format int32
@@ -11628,14 +12400,26 @@ export const getNftCollections = async (
          * @example 10
          */
         offset?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getNftCollections(query, params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getNftCollections(options?.query, options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11646,12 +12430,30 @@ export const getNftCollections = async (
  * @name GetNftCollection
  * @request GET:/v2/nfts/collections/{account_id}
  */
-export const getNftCollection = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const getNftCollection = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getNftCollection(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getNftCollection(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11662,17 +12464,32 @@ export const getNftCollection = async (accountId_Address: Address, params: Reque
  * @name GetNftCollectionItemsByAddresses
  * @request POST:/v2/nfts/collections/_bulk
  */
-export const getNftCollectionItemsByAddresses = async (
-    data: {
+export const getNftCollectionItemsByAddresses = async <
+    ThrowOnError extends boolean = false
+>(options: {
+    client?: TonApiClient;
+    body: {
         accountIds: Address[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getNftCollectionItemsByAddresses(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getNftCollectionItemsByAddresses(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11683,8 +12500,11 @@ export const getNftCollectionItemsByAddresses = async (
  * @name GetItemsFromCollection
  * @request GET:/v2/nfts/collections/{account_id}/items
  */
-export const getItemsFromCollection = async (
-    accountId_Address: Address,
+export const getItemsFromCollection = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * @min 1
@@ -11697,18 +12517,30 @@ export const getItemsFromCollection = async (
          * @default 0
          */
         offset?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getItemsFromCollection(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getItemsFromCollection(
+            options.path.accountId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11719,17 +12551,30 @@ export const getItemsFromCollection = async (
  * @name GetNftItemsByAddresses
  * @request POST:/v2/nfts/_bulk
  */
-export const getNftItemsByAddresses = async (
-    data: {
+export const getNftItemsByAddresses = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         accountIds: Address[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getNftItemsByAddresses(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getNftItemsByAddresses(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11740,15 +12585,30 @@ export const getNftItemsByAddresses = async (
  * @name GetNftItemByAddress
  * @request GET:/v2/nfts/{account_id}
  */
-export const getNftItemByAddress = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getNftItemByAddress = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getNftItemByAddress(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getNftItemByAddress(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11760,8 +12620,11 @@ export const getNftItemByAddress = async (
  * @request GET:/v2/nfts/{account_id}/history
  * @deprecated
  */
-export const getNftHistoryById = async (
-    accountId_Address: Address,
+export const getNftHistoryById = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query: {
         /**
          * omit this parameter to get last events
@@ -11787,14 +12650,30 @@ export const getNftHistoryById = async (
          * @example 1668436763
          */
         end_date?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getNftHistoryById(accountId_Address, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getNftHistoryById(
+            options.path.accountId,
+            options.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11805,12 +12684,30 @@ export const getNftHistoryById = async (
  * @name GetDnsInfo
  * @request GET:/v2/dns/{domain_name}
  */
-export const getDnsInfo = async (domainName: string, params: RequestParams = {}) => {
+export const getDnsInfo = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        domainName: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getDnsInfo(domainName, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getDnsInfo(options.path.domainName, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11821,19 +12718,38 @@ export const getDnsInfo = async (domainName: string, params: RequestParams = {})
  * @name DnsResolve
  * @request GET:/v2/dns/{domain_name}/resolve
  */
-export const dnsResolve = async (
-    domainName: string,
+export const dnsResolve = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        domainName: string;
+    };
     query?: {
         /** @default false */
         filter?: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().dnsResolve(domainName, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.dnsResolve(
+            options.path.domainName,
+            options?.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11844,12 +12760,30 @@ export const dnsResolve = async (
  * @name GetDomainBids
  * @request GET:/v2/dns/{domain_name}/bids
  */
-export const getDomainBids = async (domainName: string, params: RequestParams = {}) => {
+export const getDomainBids = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        domainName: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getDomainBids(domainName, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getDomainBids(options.path.domainName, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11860,21 +12794,34 @@ export const getDomainBids = async (domainName: string, params: RequestParams = 
  * @name GetAllAuctions
  * @request GET:/v2/dns/auctions
  */
-export const getAllAuctions = async (
+export const getAllAuctions = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
     query?: {
         /**
          * domain filter for current auctions "ton" or "t.me"
          * @example "ton"
          */
         tld?: string;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAllAuctions(query, params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getAllAuctions(options?.query, options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11885,12 +12832,30 @@ export const getAllAuctions = async (
  * @name GetTrace
  * @request GET:/v2/traces/{trace_id}
  */
-export const getTrace = async (traceId: string, params: RequestParams = {}) => {
+export const getTrace = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        traceId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getTrace(traceId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getTrace(options.path.traceId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11901,12 +12866,30 @@ export const getTrace = async (traceId: string, params: RequestParams = {}) => {
  * @name GetEvent
  * @request GET:/v2/events/{event_id}
  */
-export const getEvent = async (eventId: string, params: RequestParams = {}) => {
+export const getEvent = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        eventId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getEvent(eventId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getEvent(options.path.eventId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11917,7 +12900,8 @@ export const getEvent = async (eventId: string, params: RequestParams = {}) => {
  * @name GetJettons
  * @request GET:/v2/jettons
  */
-export const getJettons = async (
+export const getJettons = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
     query?: {
         /**
          * @format int32
@@ -11934,14 +12918,26 @@ export const getJettons = async (
          * @example 10
          */
         offset?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getJettons(query, params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getJettons(options?.query, options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11952,12 +12948,30 @@ export const getJettons = async (
  * @name GetJettonInfo
  * @request GET:/v2/jettons/{account_id}
  */
-export const getJettonInfo = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const getJettonInfo = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getJettonInfo(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getJettonInfo(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11968,17 +12982,30 @@ export const getJettonInfo = async (accountId_Address: Address, params: RequestP
  * @name GetJettonInfosByAddresses
  * @request POST:/v2/jettons/_bulk
  */
-export const getJettonInfosByAddresses = async (
-    data: {
+export const getJettonInfosByAddresses = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         accountIds: Address[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getJettonInfosByAddresses(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getJettonInfosByAddresses(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -11989,8 +13016,11 @@ export const getJettonInfosByAddresses = async (
  * @name GetJettonHolders
  * @request GET:/v2/jettons/{account_id}/holders
  */
-export const getJettonHolders = async (
-    accountId_Address: Address,
+export const getJettonHolders = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * @min 1
@@ -12004,14 +13034,30 @@ export const getJettonHolders = async (
          * @default 0
          */
         offset?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getJettonHolders(accountId_Address, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getJettonHolders(
+            options.path.accountId,
+            options?.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12022,20 +13068,35 @@ export const getJettonHolders = async (
  * @name GetJettonTransferPayload
  * @request GET:/v2/jettons/{jetton_id}/transfer/{account_id}/payload
  */
-export const getJettonTransferPayload = async (
-    accountId_Address: Address,
-    jettonId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getJettonTransferPayload = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+        jettonId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getJettonTransferPayload(
-            accountId_Address,
-            jettonId_Address,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getJettonTransferPayload(
+            options.path.accountId,
+            options.path.jettonId,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12046,12 +13107,30 @@ export const getJettonTransferPayload = async (
  * @name GetJettonsEvents
  * @request GET:/v2/events/{event_id}/jettons
  */
-export const getJettonsEvents = async (eventId: string, params: RequestParams = {}) => {
+export const getJettonsEvents = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        eventId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getJettonsEvents(eventId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getJettonsEvents(options.path.eventId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12062,12 +13141,30 @@ export const getJettonsEvents = async (eventId: string, params: RequestParams = 
  * @name GetExtraCurrencyInfo
  * @request GET:/v2/extra-currency/{id}
  */
-export const getExtraCurrencyInfo = async (id: number, params: RequestParams = {}) => {
+export const getExtraCurrencyInfo = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        id: number;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getExtraCurrencyInfo(id, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getExtraCurrencyInfo(options.path.id, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12078,18 +13175,33 @@ export const getExtraCurrencyInfo = async (id: number, params: RequestParams = {
  * @name GetAccountNominatorsPools
  * @request GET:/v2/staking/nominator/{account_id}/pools
  */
-export const getAccountNominatorsPools = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getAccountNominatorsPools = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountNominatorsPools(
-            accountId_Address,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountNominatorsPools(
+            options.path.accountId,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12100,15 +13212,30 @@ export const getAccountNominatorsPools = async (
  * @name GetStakingPoolInfo
  * @request GET:/v2/staking/pool/{account_id}
  */
-export const getStakingPoolInfo = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getStakingPoolInfo = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getStakingPoolInfo(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getStakingPoolInfo(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12119,15 +13246,30 @@ export const getStakingPoolInfo = async (
  * @name GetStakingPoolHistory
  * @request GET:/v2/staking/pool/{account_id}/history
  */
-export const getStakingPoolHistory = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getStakingPoolHistory = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getStakingPoolHistory(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getStakingPoolHistory(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12138,7 +13280,8 @@ export const getStakingPoolHistory = async (
  * @name GetStakingPools
  * @request GET:/v2/staking/pools
  */
-export const getStakingPools = async (
+export const getStakingPools = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
     query?: {
         /**
          * account ID
@@ -12151,14 +13294,26 @@ export const getStakingPools = async (
          * @example false
          */
         include_unverified?: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getStakingPools(query, params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getStakingPools(options?.query, options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12169,12 +13324,27 @@ export const getStakingPools = async (
  * @name GetStorageProviders
  * @request GET:/v2/storage/providers
  */
-export const getStorageProviders = async (params: RequestParams = {}) => {
+export const getStorageProviders = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getStorageProviders(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getStorageProviders(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12185,7 +13355,8 @@ export const getStorageProviders = async (params: RequestParams = {}) => {
  * @name GetRates
  * @request GET:/v2/rates
  */
-export const getRates = async (
+export const getRates = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
     query: {
         /**
          * accept cryptocurrencies or jetton master addresses, separated by commas
@@ -12199,14 +13370,26 @@ export const getRates = async (
          * @example ["ton","usd","rub"]
          */
         currencies: string[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRates(query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRates(options.query, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12217,7 +13400,8 @@ export const getRates = async (
  * @name GetChartRates
  * @request GET:/v2/rates/chart
  */
-export const getChartRates = async (
+export const getChartRates = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
     query: {
         /** accept cryptocurrencies or jetton master addresses */
         token: Address | string;
@@ -12242,14 +13426,26 @@ export const getChartRates = async (
          * @default 200
          */
         points_count?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getChartRates(query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getChartRates(options.query, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12260,12 +13456,27 @@ export const getChartRates = async (
  * @name GetMarketsRates
  * @request GET:/v2/rates/markets
  */
-export const getMarketsRates = async (params: RequestParams = {}) => {
+export const getMarketsRates = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getMarketsRates(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getMarketsRates(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12276,12 +13487,27 @@ export const getMarketsRates = async (params: RequestParams = {}) => {
  * @name GetTonConnectPayload
  * @request GET:/v2/tonconnect/payload
  */
-export const getTonConnectPayload = async (params: RequestParams = {}) => {
+export const getTonConnectPayload = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getTonConnectPayload(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getTonConnectPayload(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12292,18 +13518,31 @@ export const getTonConnectPayload = async (params: RequestParams = {}) => {
  * @name GetAccountInfoByStateInit
  * @request POST:/v2/tonconnect/stateinit
  */
-export const getAccountInfoByStateInit = async (
-    data: {
+export const getAccountInfoByStateInit = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** @format cell-base64 */
         stateInit: Cell;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountInfoByStateInit(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountInfoByStateInit(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12314,8 +13553,9 @@ export const getAccountInfoByStateInit = async (
  * @name TonConnectProof
  * @request POST:/v2/wallet/auth/proof
  */
-export const tonConnectProof = async (
-    data: {
+export const tonConnectProof = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /**
          * @format address
          * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
@@ -12338,14 +13578,26 @@ export const tonConnectProof = async (
             /** @format cell-base64 */
             stateInit?: Cell;
         };
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().tonConnectProof(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.tonConnectProof(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12356,12 +13608,30 @@ export const tonConnectProof = async (
  * @name GetAccountSeqno
  * @request GET:/v2/wallet/{account_id}/seqno
  */
-export const getAccountSeqno = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const getAccountSeqno = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAccountSeqno(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAccountSeqno(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12372,12 +13642,30 @@ export const getAccountSeqno = async (accountId_Address: Address, params: Reques
  * @name GetWalletInfo
  * @request GET:/v2/wallet/{account_id}
  */
-export const getWalletInfo = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const getWalletInfo = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getWalletInfo(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getWalletInfo(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12388,12 +13676,30 @@ export const getWalletInfo = async (accountId_Address: Address, params: RequestP
  * @name GetWalletsByPublicKey
  * @request GET:/v2/pubkeys/{public_key}/wallets
  */
-export const getWalletsByPublicKey = async (publicKey: string, params: RequestParams = {}) => {
+export const getWalletsByPublicKey = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        publicKey: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getWalletsByPublicKey(publicKey, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getWalletsByPublicKey(options.path.publicKey, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12404,12 +13710,27 @@ export const getWalletsByPublicKey = async (publicKey: string, params: RequestPa
  * @name GaslessConfig
  * @request GET:/v2/gasless/config
  */
-export const gaslessConfig = async (params: RequestParams = {}) => {
+export const gaslessConfig = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().gaslessConfig(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.gaslessConfig(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12420,9 +13741,12 @@ export const gaslessConfig = async (params: RequestParams = {}) => {
  * @name GaslessEstimate
  * @request POST:/v2/gasless/estimate/{master_id}
  */
-export const gaslessEstimate = async (
-    masterId_Address: Address,
-    data: {
+export const gaslessEstimate = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        masterId: Address;
+    };
+    body: {
         /**
          * TONAPI verifies that the account has enough jettons to pay the commission and make a transfer.
          * @default false
@@ -12437,14 +13761,30 @@ export const gaslessEstimate = async (
             /** @format cell */
             boc: Cell;
         }[];
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().gaslessEstimate(masterId_Address, data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.gaslessEstimate(
+            options.path.masterId,
+            options.body,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12455,20 +13795,33 @@ export const gaslessEstimate = async (
  * @name GaslessSend
  * @request POST:/v2/gasless/send
  */
-export const gaslessSend = async (
-    data: {
+export const gaslessSend = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** hex encoded public key */
         walletPublicKey: string;
         /** @format cell */
         boc: Cell;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().gaslessSend(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.gaslessSend(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12479,12 +13832,27 @@ export const gaslessSend = async (
  * @name GetRawMasterchainInfo
  * @request GET:/v2/liteserver/get_masterchain_info
  */
-export const getRawMasterchainInfo = async (params: RequestParams = {}) => {
+export const getRawMasterchainInfo = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawMasterchainInfo(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getRawMasterchainInfo(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12495,7 +13863,8 @@ export const getRawMasterchainInfo = async (params: RequestParams = {}) => {
  * @name GetRawMasterchainInfoExt
  * @request GET:/v2/liteserver/get_masterchain_info_ext
  */
-export const getRawMasterchainInfoExt = async (
+export const getRawMasterchainInfoExt = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
     query: {
         /**
          * mode
@@ -12503,14 +13872,26 @@ export const getRawMasterchainInfoExt = async (
          * @example 0
          */
         mode: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawMasterchainInfoExt(query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawMasterchainInfoExt(options.query, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12521,12 +13902,27 @@ export const getRawMasterchainInfoExt = async (
  * @name GetRawTime
  * @request GET:/v2/liteserver/get_time
  */
-export const getRawTime = async (params: RequestParams = {}) => {
+export const getRawTime = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawTime(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getRawTime(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12537,12 +13933,30 @@ export const getRawTime = async (params: RequestParams = {}) => {
  * @name GetRawBlockchainBlock
  * @request GET:/v2/liteserver/get_block/{block_id}
  */
-export const getRawBlockchainBlock = async (blockId: string, params: RequestParams = {}) => {
+export const getRawBlockchainBlock = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawBlockchainBlock(blockId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawBlockchainBlock(options.path.blockId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12553,12 +13967,33 @@ export const getRawBlockchainBlock = async (blockId: string, params: RequestPara
  * @name GetRawBlockchainBlockState
  * @request GET:/v2/liteserver/get_state/{block_id}
  */
-export const getRawBlockchainBlockState = async (blockId: string, params: RequestParams = {}) => {
+export const getRawBlockchainBlockState = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawBlockchainBlockState(blockId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawBlockchainBlockState(
+            options.path.blockId,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12569,8 +14004,11 @@ export const getRawBlockchainBlockState = async (blockId: string, params: Reques
  * @name GetRawBlockchainBlockHeader
  * @request GET:/v2/liteserver/get_block_header/{block_id}
  */
-export const getRawBlockchainBlockHeader = async (
-    blockId: string,
+export const getRawBlockchainBlockHeader = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
     query: {
         /**
          * mode
@@ -12578,14 +14016,30 @@ export const getRawBlockchainBlockHeader = async (
          * @example 0
          */
         mode: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawBlockchainBlockHeader(blockId, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawBlockchainBlockHeader(
+            options.path.blockId,
+            options.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12596,18 +14050,31 @@ export const getRawBlockchainBlockHeader = async (
  * @name SendRawMessage
  * @request POST:/v2/liteserver/send_message
  */
-export const sendRawMessage = async (
-    data: {
+export const sendRawMessage = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** @format cell-base64 */
         body: Cell;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().sendRawMessage(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.sendRawMessage(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12618,26 +14085,41 @@ export const sendRawMessage = async (
  * @name GetRawAccountState
  * @request GET:/v2/liteserver/get_account_state/{account_id}
  */
-export const getRawAccountState = async (
-    accountId_Address: Address,
+export const getRawAccountState = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * target block: (workchain,shard,seqno,root_hash,file_hash)
          * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
          */
         target_block?: string;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawAccountState(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawAccountState(
+            options.path.accountId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12648,8 +14130,11 @@ export const getRawAccountState = async (
  * @name GetRawShardInfo
  * @request GET:/v2/liteserver/get_shard_info/{block_id}
  */
-export const getRawShardInfo = async (
-    blockId: string,
+export const getRawShardInfo = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
     query: {
         /**
          * workchain
@@ -12668,14 +14153,30 @@ export const getRawShardInfo = async (
          * @example false
          */
         exact: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawShardInfo(blockId, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawShardInfo(
+            options.path.blockId,
+            options.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12686,12 +14187,30 @@ export const getRawShardInfo = async (
  * @name GetAllRawShardsInfo
  * @request GET:/v2/liteserver/get_all_shards_info/{block_id}
  */
-export const getAllRawShardsInfo = async (blockId: string, params: RequestParams = {}) => {
+export const getAllRawShardsInfo = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getAllRawShardsInfo(blockId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getAllRawShardsInfo(options.path.blockId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12702,8 +14221,11 @@ export const getAllRawShardsInfo = async (blockId: string, params: RequestParams
  * @name GetRawTransactions
  * @request GET:/v2/liteserver/get_transactions/{account_id}
  */
-export const getRawTransactions = async (
-    accountId_Address: Address,
+export const getRawTransactions = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query: {
         /**
          * count
@@ -12722,18 +14244,30 @@ export const getRawTransactions = async (
          * @example "131D0C65055F04E9C19D687B51BC70F952FD9CA6F02C2801D3B89964A779DF85"
          */
         hash: string;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawTransactions(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawTransactions(
+            options.path.accountId,
+            options.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12744,8 +14278,11 @@ export const getRawTransactions = async (
  * @name GetRawListBlockTransactions
  * @request GET:/v2/liteserver/list_block_transactions/{block_id}
  */
-export const getRawListBlockTransactions = async (
-    blockId: string,
+export const getRawListBlockTransactions = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
     query: {
         /**
          * mode
@@ -12771,14 +14308,30 @@ export const getRawListBlockTransactions = async (
          * @example 23814011000000
          */
         lt?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawListBlockTransactions(blockId, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawListBlockTransactions(
+            options.path.blockId,
+            options.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12789,7 +14342,8 @@ export const getRawListBlockTransactions = async (
  * @name GetRawBlockProof
  * @request GET:/v2/liteserver/get_block_proof
  */
-export const getRawBlockProof = async (
+export const getRawBlockProof = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
     query: {
         /**
          * known block: (workchain,shard,seqno,root_hash,file_hash)
@@ -12807,14 +14361,26 @@ export const getRawBlockProof = async (
          * @example 0
          */
         mode: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawBlockProof(query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawBlockProof(options.query, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12825,8 +14391,11 @@ export const getRawBlockProof = async (
  * @name GetRawConfig
  * @request GET:/v2/liteserver/get_config_all/{block_id}
  */
-export const getRawConfig = async (
-    blockId: string,
+export const getRawConfig = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
     query: {
         /**
          * mode
@@ -12834,14 +14403,30 @@ export const getRawConfig = async (
          * @example 0
          */
         mode: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawConfig(blockId, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawConfig(
+            options.path.blockId,
+            options.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12852,12 +14437,30 @@ export const getRawConfig = async (
  * @name GetRawShardBlockProof
  * @request GET:/v2/liteserver/get_shard_block_proof/{block_id}
  */
-export const getRawShardBlockProof = async (blockId: string, params: RequestParams = {}) => {
+export const getRawShardBlockProof = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        blockId: string;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getRawShardBlockProof(blockId, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getRawShardBlockProof(options.path.blockId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12868,12 +14471,27 @@ export const getRawShardBlockProof = async (blockId: string, params: RequestPara
  * @name GetOutMsgQueueSizes
  * @request GET:/v2/liteserver/get_out_msg_queue_sizes
  */
-export const getOutMsgQueueSizes = async (params: RequestParams = {}) => {
+export const getOutMsgQueueSizes = async <ThrowOnError extends boolean = false>(options?: {
+    client?: TonApiClient;
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getOutMsgQueueSizes(params);
-        return { data: result, error: null };
+        const client = options?.client || getDefaultClient();
+        const result = await client.getOutMsgQueueSizes(options?.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12884,15 +14502,30 @@ export const getOutMsgQueueSizes = async (params: RequestParams = {}) => {
  * @name GetMultisigAccount
  * @request GET:/v2/multisig/{account_id}
  */
-export const getMultisigAccount = async (
-    accountId_Address: Address,
-    params: RequestParams = {}
-) => {
+export const getMultisigAccount = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getMultisigAccount(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getMultisigAccount(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12903,12 +14536,30 @@ export const getMultisigAccount = async (
  * @name GetMultisigOrder
  * @request GET:/v2/multisig/order/{account_id}
  */
-export const getMultisigOrder = async (accountId_Address: Address, params: RequestParams = {}) => {
+export const getMultisigOrder = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getMultisigOrder(accountId_Address, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.getMultisigOrder(options.path.accountId, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12919,18 +14570,31 @@ export const getMultisigOrder = async (accountId_Address: Address, params: Reque
  * @name DecodeMessage
  * @request POST:/v2/message/decode
  */
-export const decodeMessage = async (
-    data: {
+export const decodeMessage = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** @format cell */
         boc: Cell;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().decodeMessage(data, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.decodeMessage(options.body, options.params);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12941,21 +14605,38 @@ export const decodeMessage = async (
  * @name EmulateMessageToEvent
  * @request POST:/v2/events/emulate
  */
-export const emulateMessageToEvent = async (
-    data: {
+export const emulateMessageToEvent = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** @format cell */
         boc: Cell;
-    },
+    };
     query?: {
         ignore_signature_check?: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().emulateMessageToEvent(data, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.emulateMessageToEvent(
+            options.body,
+            options?.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12966,21 +14647,38 @@ export const emulateMessageToEvent = async (
  * @name EmulateMessageToTrace
  * @request POST:/v2/traces/emulate
  */
-export const emulateMessageToTrace = async (
-    data: {
+export const emulateMessageToTrace = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** @format cell */
         boc: Cell;
-    },
+    };
     query?: {
         ignore_signature_check?: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().emulateMessageToTrace(data, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.emulateMessageToTrace(
+            options.body,
+            options?.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -12991,8 +14689,9 @@ export const emulateMessageToTrace = async (
  * @name EmulateMessageToWallet
  * @request POST:/v2/wallet/emulate
  */
-export const emulateMessageToWallet = async (
-    data: {
+export const emulateMessageToWallet = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    body: {
         /** @format cell */
         boc: Cell;
         /** additional per account configuration */
@@ -13008,18 +14707,34 @@ export const emulateMessageToWallet = async (
              */
             balance?: bigint;
         }[];
-    },
+    };
     query?: {
         /** @example "usd" */
         currency?: string;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().emulateMessageToWallet(data, query, params);
-        return { data: result, error: null };
+        const client = options.client || getDefaultClient();
+        const result = await client.emulateMessageToWallet(
+            options.body,
+            options?.query,
+            options.params
+        );
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -13030,27 +14745,42 @@ export const emulateMessageToWallet = async (
  * @name EmulateMessageToAccountEvent
  * @request POST:/v2/accounts/{account_id}/events/emulate
  */
-export const emulateMessageToAccountEvent = async (
-    accountId_Address: Address,
-    data: {
+export const emulateMessageToAccountEvent = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
+    body: {
         /** @format cell */
         boc: Cell;
-    },
+    };
     query?: {
         ignore_signature_check?: boolean;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().emulateMessageToAccountEvent(
-            accountId_Address,
-            data,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.emulateMessageToAccountEvent(
+            options.path.accountId,
+            options.body,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 
@@ -13061,8 +14791,11 @@ export const emulateMessageToAccountEvent = async (
  * @name GetPurchaseHistory
  * @request GET:/v2/purchases/{account_id}/history
  */
-export const getPurchaseHistory = async (
-    accountId_Address: Address,
+export const getPurchaseHistory = async <ThrowOnError extends boolean = false>(options: {
+    client?: TonApiClient;
+    path: {
+        accountId: Address;
+    };
     query?: {
         /**
          * omit this parameter to get last invoices
@@ -13077,17 +14810,29 @@ export const getPurchaseHistory = async (
          * @example 100
          */
         limit?: number;
-    },
-    params: RequestParams = {}
-) => {
+    };
+    params?: RequestParams;
+    throwOnError?: ThrowOnError;
+}) => {
     try {
-        const result = await getDefaultClient().getPurchaseHistory(
-            accountId_Address,
-            query,
-            params
+        const client = options.client || getDefaultClient();
+        const result = await client.getPurchaseHistory(
+            options.path.accountId,
+            options?.query,
+            options.params
         );
-        return { data: result, error: null };
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };

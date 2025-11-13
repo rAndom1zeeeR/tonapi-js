@@ -1,10 +1,11 @@
 import { Address, Contract, ContractProvider, TupleItem } from '@ton/core';
 import { WalletContractV4 } from '@ton/ton';
-import { initClient, execGetMethodForBlockchainAccount } from '@ton-api/client';
+import { TonApiClient } from '@ton-api/client';
 
-// Initialize client once at module load time
-initClient({
-    baseUrl: 'https://tonapi.io'
+// Create TonApiClient instance
+const tonApiClient = new TonApiClient({
+    baseUrl: 'https://tonapi.io',
+    apiKey: process.env.TONAPI_API_KEY
 });
 
 export class NftItem implements Contract {
@@ -38,18 +39,16 @@ export class WalletItem implements Contract {
     }
 
     static async createFromAddress(address: Address) {
-        const { data: accountData, error } = await execGetMethodForBlockchainAccount(
-            address,
-            'get_public_key'
-        );
-        if (error) {
-            throw new Error(`Failed to get public key: ${error.message}`);
-        }
-        const workchain = address.workChain;
-        const publicKey = BigInt(accountData.decoded.public_key);
-        const bufferPublicKey = Buffer.from(publicKey.toString(16), 'hex');
+        try {
+            const accountData = await tonApiClient.execGetMethodForBlockchainAccount(address, 'get_public_key');
+            const workchain = address.workChain;
+            const publicKey = BigInt(accountData.decoded.public_key);
+            const bufferPublicKey = Buffer.from(publicKey.toString(16), 'hex');
 
-        return new WalletItem(address, workchain, bufferPublicKey).walletContract;
+            return new WalletItem(address, workchain, bufferPublicKey).walletContract;
+        } catch (error) {
+            throw new Error(`Failed to get public key: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     public getBalance(provider: ContractProvider) {

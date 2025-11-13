@@ -1,5 +1,5 @@
 import { initTa, ta } from './utils/client';
-import { status, getAccount, execGetMethodForBlockchainAccount, TonApiParsingError, TonApiHttpError, TonApiNetworkError, TonApiUnknownError } from '@ton-api/client';
+import { status, getAccount, getAccounts, execGetMethodForBlockchainAccount, TonApiParsingError, TonApiHttpError, TonApiNetworkError, TonApiUnknownError, TonApiClient } from '@ton-api/client';
 import { Address } from '@ton/core';
 import { vi, test, expect, beforeEach, describe, afterEach } from 'vitest';
 import { mockFetch } from './utils/mockFetch';
@@ -552,5 +552,189 @@ describe('Advanced API - Global methods (returns {data, error})', () => {
         expect(error.message).toContain('Invalid request');
         expect(error.status).toBe(400);
         expect(error.type).toBe('http_error');
+    });
+
+    test('should use custom client when provided', async () => {
+        const mockData = { rest_online: true, indexing_latency: 8 };
+        const customFetch = vi.fn().mockResolvedValueOnce(createJsonResponse(mockData, 200));
+        const customClient = new TonApiClient({
+            baseUrl: 'https://custom.tonapi.io',
+            fetch: customFetch
+        });
+
+        const { data, error } = await status({ client: customClient });
+        expect(error).toBeNull();
+        expect(data).toBeDefined();
+        expect(data?.restOnline).toBe(true);
+        expect(customFetch).toHaveBeenCalledWith(
+            expect.stringContaining('https://custom.tonapi.io/v2/status'),
+            expect.any(Object)
+        );
+    });
+
+    test('should work with path parameters', async () => {
+        const mockData = {
+            address: 'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y',
+            balance: '1000000000',
+            status: 'active'
+        };
+        mockFetch(mockData);
+
+        const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+        const { data, error } = await getAccount({
+            path: { accountId: validAddress }
+        });
+
+        expect(error).toBeNull();
+        expect(data).toBeDefined();
+        expect(data?.balance).toBeDefined();
+    });
+
+    test('should work with path parameters and custom params', async () => {
+        const mockData = {
+            address: 'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y',
+            balance: '1000000000',
+            status: 'active'
+        };
+        const fetchSpy = mockFetch(mockData);
+
+        const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+        const { data, error } = await getAccount({
+            path: { accountId: validAddress },
+            params: { headers: { 'X-Custom': 'test' } }
+        });
+
+        expect(error).toBeNull();
+        expect(data).toBeDefined();
+        expect(fetchSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                headers: expect.objectContaining({
+                    'X-Custom': 'test'
+                })
+            })
+        );
+    });
+
+    test('should work with body and query parameters', async () => {
+        const mockData = {
+            accounts: [
+                {
+                    address: 'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y',
+                    balance: '1000000000',
+                    status: 'active'
+                }
+            ]
+        };
+        mockFetch(mockData);
+
+        const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+        const { data, error } = await getAccounts({
+            body: { accountIds: [address] },
+            query: { currency: 'usd' }
+        });
+
+        expect(error).toBeNull();
+        expect(data).toBeDefined();
+        expect(data?.accounts).toBeDefined();
+    });
+
+    test('should work with body only (optional query)', async () => {
+        const mockData = {
+            accounts: [
+                {
+                    address: 'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y',
+                    balance: '1000000000',
+                    status: 'active'
+                }
+            ]
+        };
+        mockFetch(mockData);
+
+        const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+        const { data, error } = await getAccounts({
+            body: { accountIds: [address] }
+        });
+
+        expect(error).toBeNull();
+        expect(data).toBeDefined();
+    });
+
+    describe('throwOnError mode', () => {
+        test('should return data directly when throwOnError is true', async () => {
+            const mockData = { rest_online: true, indexing_latency: 8 };
+            mockFetch(mockData);
+
+            const data = await status({ throwOnError: true });
+
+            // Should return data directly, not Result type
+            expect(data).toBeDefined();
+            expect(data.restOnline).toBe(true);
+            expect(data.indexingLatency).toBe(8);
+
+            // Should NOT have error property (not a Result type)
+            expect(data).not.toHaveProperty('error');
+            expect(data).not.toHaveProperty('data');
+        });
+
+        test('should throw error when throwOnError is true and API returns error', async () => {
+            const mockError = { error: 'Server error' };
+            vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse(mockError, 500));
+
+            await expect(status({ throwOnError: true })).rejects.toThrow();
+        });
+
+        test('should work with path parameters and throwOnError', async () => {
+            const mockData = {
+                address: 'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y',
+                balance: '1000000000',
+                status: 'active'
+            };
+            mockFetch(mockData);
+
+            const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+            const data = await getAccount({
+                path: { accountId: validAddress },
+                throwOnError: true
+            });
+
+            expect(data).toBeDefined();
+            expect(data.balance).toBeDefined();
+            // Should NOT have Result properties
+            expect(data).not.toHaveProperty('error');
+        });
+
+        test('should throw specific error type when throwOnError is true', async () => {
+            const mockError = { error: 'Not found' };
+            vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse(mockError, 404));
+
+            const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+
+            try {
+                await getAccount({
+                    path: { accountId: validAddress },
+                    throwOnError: true
+                });
+                // Should not reach here
+                expect(true).toBe(false);
+            } catch (error) {
+                assertIsHttpError(error);
+                expect(error.status).toBe(404);
+                expect(error.message).toContain('Not found');
+            }
+        });
+
+        test('throwOnError false should still return Result type', async () => {
+            const mockData = { rest_online: true, indexing_latency: 8 };
+            mockFetch(mockData);
+
+            const result = await status({ throwOnError: false });
+
+            // Should return Result type
+            expect(result).toHaveProperty('data');
+            expect(result).toHaveProperty('error');
+            expect(result.error).toBeNull();
+            expect(result.data).toBeDefined();
+        });
     });
 });

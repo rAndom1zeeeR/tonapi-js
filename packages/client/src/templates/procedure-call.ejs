@@ -23,6 +23,19 @@ const pathParams = originPathParams.map(
 );
 // #endregion
 
+// #region Helper functions for Advanced API (global functions)
+const hasPathParams = () => pathParams.length > 0;
+const hasQueryParams = () => query != null;
+const hasBodyParams = () => payload != null;
+const isOptionsRequired = () => {
+    // Options required if there are non-optional path, body, or query params
+    const hasRequiredPath = pathParams.some(param => !param.optional);
+    const hasRequiredBody = payload && !payload.optional;
+    const hasRequiredQuery = query && !query.optional;
+    return hasRequiredPath || hasRequiredBody || hasRequiredQuery;
+};
+// #endregion
+
 const isFetchTemplate = config.httpClientType === HTTP_CLIENT.FETCH;
 
 // Use consistent parameter name for both class methods and global functions
@@ -75,7 +88,7 @@ const bodyContentKindTmpl = requestContentKind[requestBodyInfo.contentKind] || n
 const responseFormatTmpl = responseContentKind[successResponse.contentKind] || null;
 const securityTmpl = security ? 'true' : null;
 
-const describeReturnType = () => !config.toJS ? '' : `Promise<Result<${type}>>`;
+const describeReturnType = () => !config.toJS ? '' : `MethodResult<${type}, ThrowOnError>`;
 
 const reducedPathParams = addressType.map((name) => `const ${name} = ${getNameAddressFromId(name)}.toRawString();`).join('\n');
 
@@ -100,6 +113,82 @@ const queryImplodeParams = route.routeParams.query.
     filter(param => param.explode === false)
     .map(param => param.name)
 const queryImplodeTmpl = queryImplodeParams.length === 0 ? null : JSON.stringify(queryImplodeParams)
+
+// #region Advanced API options type generation (for isFlat=true)
+const generatePathFieldName = (param) => {
+    // Remove _Address suffix to get original parameter name
+    return param.name.endsWith('_Address') ? param.name.slice(0, -8) : param.name;
+};
+
+const generateOptionsInterface = () => {
+    const fields = [];
+
+    // Always add client
+    fields.push('client?: TonApiClient;');
+
+    // Add path field if there are path parameters
+    if (hasPathParams()) {
+        const pathFields = pathParams.map(param => {
+            const fieldName = generatePathFieldName(param);
+            const optional = param.optional ? '?' : '';
+            return `${fieldName}${optional}: ${param.type}`;
+        }).join(';\n        ');
+        fields.push(`path: {\n        ${pathFields};\n    };`);
+    }
+
+    // Add body field if there is a payload
+    if (hasBodyParams()) {
+        const bodyOptional = payload.optional ? '?' : '';
+        fields.push(`body${bodyOptional}: ${payload.type};`);
+    }
+
+    // Add query field if there are query parameters
+    if (hasQueryParams()) {
+        const queryOptional = query.optional ? '?' : '';
+        fields.push(`query${queryOptional}: ${query.type};`);
+    }
+
+    // Always add params
+    fields.push('params?: RequestParams;');
+
+    // Add throwOnError for conditional return type
+    fields.push('throwOnError?: ThrowOnError;');
+
+    return `{\n    ${fields.join('\n    ')}\n}`;
+};
+
+const optionsType = generateOptionsInterface();
+const optionsArgument = `options${isOptionsRequired() ? '' : '?'}`;
+
+// Generate all arguments for calling the instance method
+// Must match the order of sortedWrapperArgs (which sorts by optionality)
+const generateAllArguments = () => {
+    const args = [];
+
+    // Build args using sortedWrapperArgs order (path, query, body, params sorted by optionality)
+    sortedWrapperArgs.forEach(arg => {
+        if (arg === requestConfigParam) {
+            // params argument - use optional chaining only if options itself is optional
+            args.push(isOptionsRequired() ? 'options.params' : 'options?.params');
+        } else if (arg === payload) {
+            // body argument
+            const isRequired = !payload.optional;
+            args.push(isRequired ? 'options.body' : 'options?.body');
+        } else if (arg === query) {
+            // query argument
+            const isRequired = !query.optional;
+            args.push(isRequired ? 'options.query' : 'options?.query');
+        } else if (pathParams.includes(arg)) {
+            // path parameter
+            const fieldName = generatePathFieldName(arg);
+            const isRequired = !arg.optional;
+            args.push(isRequired ? `options.path.${fieldName}` : `options?.path?.${fieldName}`);
+        }
+    });
+
+    return args.join(', ');
+};
+// #endregion
 %>
 /**
 <%~ routeDocs.description %>
@@ -110,12 +199,23 @@ const queryImplodeTmpl = queryImplodeParams.length === 0 ? null : JSON.stringify
 
  */
 <% if (isFlat) { %>
-export const <%~ route.routeName.usage %> = async (<%~ wrapperArgs %>)<%~ config.toJS ? `: ${describeReturnType()}` : "" %> => {
+export const <%~ route.routeName.usage %> = async <ThrowOnError extends boolean = false>(<%~ optionsArgument %>: <%~ optionsType %>)<%~ config.toJS ? `: ${describeReturnType()}` : "" %> => {
     try {
-        const result = await getDefaultClient().<%~ route.routeName.usage %>(<%~ passedArgs %>);
-        return { data: result, error: null };
+        const client = <%= isOptionsRequired() ? 'options.client' : 'options?.client' %> || getDefaultClient();
+        const result = await client.<%~ route.routeName.usage %>(<%~ generateAllArguments() %>);
+
+        // If throwOnError is true, return data directly
+        if (options?.throwOnError) {
+            return result as any;
+        }
+
+        return { data: result, error: null } as any;
     } catch (error) {
-        return { data: null, error: error as TonApiError };
+        // If throwOnError is true, rethrow the error
+        if (options?.throwOnError) {
+            throw error;
+        }
+        return { data: null, error: error as TonApiError } as any;
     }
 };
 <% } else { %>

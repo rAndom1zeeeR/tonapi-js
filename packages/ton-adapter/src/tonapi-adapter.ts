@@ -19,25 +19,27 @@ import {
 } from '@ton/core';
 import {
     AccountStatus as TonApiAccountStatus,
-    getBlockchainRawAccount,
-    execGetMethodForBlockchainAccount,
-    getAccount,
-    sendBlockchainMessage,
-    getBlockchainAccountTransactions,
     BlockchainRawAccount,
     AccountStatus,
-    TonApiHttpError
+    TonApiHttpError,
+    TonApiClient
 } from '@ton-api/client';
 import { Buffer } from 'buffer';
 
 export class ContractAdapter {
+    private client: TonApiClient;
+
+    constructor(client: TonApiClient) {
+        this.client = client;
+    }
+
     /**
      * Open smart contract
      * @param contract contract
      * @returns opened contract
      */
     open<T extends Contract>(contract: T) {
-        return openContract<T>(contract, args => createProvider(args.address, args.init));
+        return openContract<T>(contract, args => createProvider(this.client, args.address, args.init));
     }
 
     /**
@@ -47,52 +49,47 @@ export class ContractAdapter {
      * @returns provider
      */
     provider(address: Address, init?: { code?: Cell; data?: Cell } | null) {
-        return createProvider(address, init ? init : null);
+        return createProvider(this.client, address, init ? init : null);
     }
 }
 type LocalBlockchainRawAccount = Partial<Pick<BlockchainRawAccount, 'lastTransactionLt'>> &
     Omit<BlockchainRawAccount, 'lastTransactionLt'>;
 
 function createProvider(
+    client: TonApiClient,
     address: Address,
     init: { code?: Cell | null; data?: Cell | null } | null
 ): ContractProvider {
     return {
         async getState(): Promise<ContractState> {
             // Load state
-            const { data: accountData, error: accountError } =
-                await getBlockchainRawAccount(address);
+            const account: LocalBlockchainRawAccount = await client
+                .getBlockchainRawAccount(address)
+                .catch((accountError: unknown) => {
+                    // Check if it's a 404 error (account not found)
+                    const accountNotExists =
+                        accountError instanceof TonApiHttpError && accountError.status === 404;
 
-            let account: LocalBlockchainRawAccount;
-            if (accountError) {
-                // Check if it's a 404 error (account not found)
-                const accountNotExists =
-                    accountError instanceof TonApiHttpError && accountError.status === 404;
-
-                if (!accountNotExists) {
-                    throw new Error(`Account request failed`, {
-                        cause: accountError
-                    });
-                }
-
-                const mockResult: LocalBlockchainRawAccount = {
-                    address: address,
-                    balance: 0n,
-                    lastTransactionLt: undefined,
-                    status: AccountStatus.Uninit,
-                    storage: {
-                        usedCells: 1,
-                        usedBits: 95,
-                        usedPublicCells: 0,
-                        lastPaid: Math.floor(new Date().getTime() / 1000),
-                        duePayment: 0n
+                    if (!accountNotExists) {
+                        throw new Error(`Account request failed`, {
+                            cause: accountError
+                        });
                     }
-                };
 
-                account = mockResult;
-            } else {
-                account = accountData;
-            }
+                    return {
+                        address: address,
+                        balance: 0n,
+                        lastTransactionLt: undefined,
+                        status: AccountStatus.Uninit,
+                        storage: {
+                            usedCells: 1,
+                            usedBits: 95,
+                            usedPublicCells: 0,
+                            lastPaid: Math.floor(new Date().getTime() / 1000),
+                            duePayment: 0n
+                        }
+                    } as LocalBlockchainRawAccount;
+                });
 
             // Convert state
             const last =
@@ -123,11 +120,14 @@ function createProvider(
                 }
             };
 
-            const extraCurrency: ExtraCurrency | null = account.extraBalance
-                ? Object.fromEntries(
-                      Object.entries(account.extraBalance).map(([k, v]) => [Number(k), BigInt(v)])
-                  )
-                : null;
+            let extraCurrency: ExtraCurrency | null = null;
+            if (account.extraBalance) {
+                const ec: Record<number, bigint> = {};
+                for (const [k, v] of Object.entries(account.extraBalance)) {
+                    ec[Number(k)] = BigInt(v as unknown as string | number | bigint);
+                }
+                extraCurrency = ec as unknown as ExtraCurrency;
+            }
 
             return {
                 balance: account.balance,
@@ -145,34 +145,31 @@ function createProvider(
                 throw new Error('Tuples as get parameters are not supported by tonapi');
             }
 
-            const { data: result, error } = await execGetMethodForBlockchainAccount(address, name, {
-                args: args.map(TupleItemToTonapiString)
-            });
-
-            if (error) {
-                throw new Error(`Get method execution failed`, {
-                    cause: error
+            return client
+                .execGetMethodForBlockchainAccount(address, name, {
+                    args: args.map(TupleItemToTonapiString)
+                })
+                .then((result) => ({
+                    stack: new TupleReader(result.stack)
+                }))
+                .catch((error: unknown) => {
+                    throw new Error(`Get method execution failed`, {
+                        cause: error
+                    });
                 });
-            }
-
-            return {
-                stack: new TupleReader(result.stack)
-            };
         },
         async external(message) {
             // Resolve init
-            let neededInit: { code?: Cell | null; data?: Cell | null } | null = null;
-            if (init) {
-                const { data, error } = await getAccount(address);
-                if (error) {
-                    throw new Error(`Failed to get account info`, {
-                        cause: error
-                    });
-                }
-                if (data.status !== 'active') {
-                    neededInit = init;
-                }
-            }
+            const neededInit: { code?: Cell | null; data?: Cell | null } | null = init
+                ? await client
+                    .getAccount(address)
+                    .then((data) => (data.status !== 'active' ? init : null))
+                    .catch((error: unknown) => {
+                        throw new Error(`Failed to get account info`, {
+                            cause: error
+                        });
+                    })
+                : null;
 
             // Send with state init
             const ext = external({
@@ -182,28 +179,26 @@ function createProvider(
             });
             const boc = beginCell().store(storeMessage(ext)).endCell();
 
-            const { error } = await sendBlockchainMessage({ boc });
-
-            if (error) {
-                throw new Error(`Failed to send blockchain message`, {
-                    cause: error
+            return client
+                .sendBlockchainMessage({ boc })
+                .catch((error: unknown) => {
+                    throw new Error(`Failed to send blockchain message`, {
+                        cause: error
+                    });
                 });
-            }
         },
         async internal(via, message) {
             // Resolve init
-            let neededInit: { code?: Cell | null; data?: Cell | null } | null = null;
-            if (init) {
-                const { data, error } = await getAccount(address);
-                if (error) {
-                    throw new Error(`Failed to get account info`, {
-                        cause: error
-                    });
-                }
-                if (data.status !== 'active') {
-                    neededInit = init;
-                }
-            }
+            const neededInit: { code?: Cell | null; data?: Cell | null } | null = init
+                ? await client
+                    .getAccount(address)
+                    .then((data) => (data.status !== 'active' ? init : null))
+                    .catch((error: unknown) => {
+                        throw new Error(`Failed to get account info`, {
+                            cause: error
+                        });
+                    })
+                : null;
 
             // Resolve bounce
             let bounce = true;
@@ -238,7 +233,7 @@ function createProvider(
             });
         },
         open<T extends Contract>(contract: T): OpenedContract<T> {
-            return openContract(contract, params => createProvider(params.address, params.init));
+            return openContract(contract, params => createProvider(client, params.address, params.init));
         },
         async getTransactions(
             address: Address,
@@ -250,20 +245,22 @@ function createProvider(
                 'hash param in getTransactions action ignored, because not supported',
                 hash.toString('hex')
             );
-            const { data: result, error } = await getBlockchainAccountTransactions(address, {
-                before_lt: lt + 1n,
-                limit
-            });
 
-            if (error) {
-                throw new Error(`Failed to get account transactions`, {
-                    cause: error
+            return client
+                .getBlockchainAccountTransactions(address, {
+                    before_lt: lt + 1n,
+                    limit
+                })
+                .then((result) =>
+                    result.transactions.map(transaction =>
+                        loadTransaction(transaction.raw.asSlice())
+                    )
+                )
+                .catch((error: unknown) => {
+                    throw new Error(`Failed to get account transactions`, {
+                        cause: error
+                    });
                 });
-            }
-
-            return result.transactions.map(transaction =>
-                loadTransaction(transaction.raw.asSlice())
-            );
         }
     };
 }
