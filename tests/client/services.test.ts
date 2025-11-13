@@ -1,13 +1,8 @@
 import { Address } from '@ton/core';
-import { getChartRates, getRates as getRatesOp } from '@ton-api/client';
-import { initTa } from './utils/client';
+import { ta } from './utils/client';
 import { getChartRates as getChartRatesMock, getRates as getRatesMock } from './__mock__/services';
 import { mockFetch } from './utils/mockFetch';
-import { test, expect, afterEach, beforeEach, vi } from 'vitest';
-
-beforeEach(() => {
-    initTa();
-});
+import { test, expect, afterEach, vi } from 'vitest';
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -18,18 +13,17 @@ test('getChartRates, should correct parse array in pair', async () => {
 
     const addressString = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await getChartRates({
+    const data = await ta.getChartRates({
         token: addressObject,
         currency: 'rub'
     });
 
-    expect(error).toBeNull();
     expect(data).toBeDefined();
-    expect(data?.points).toBeDefined();
-    expect(Array.isArray(data?.points)).toBe(true);
-    expect(data?.points?.length).toBeGreaterThan(0);
+    expect(data.points).toBeDefined();
+    expect(Array.isArray(data.points)).toBe(true);
+    expect(data.points.length).toBeGreaterThan(0);
 
-    data?.points?.forEach(point => {
+    data.points.forEach(point => {
         expect(Array.isArray(point)).toBe(true);
         expect(point.length).toBe(2);
 
@@ -45,28 +39,21 @@ test('getChartRates, should correct parse array in pair', async () => {
 test('getRates, additionalProperties should be not convert to camelCase', async () => {
     mockFetch(getRatesMock);
 
-    const { data, error } = await getRatesOp({
+    const data = await ta.getRates({
         tokens: ['TON,TOKEN_WITH_UNDERSCORE'],
         currencies: ['USD', 'EUR']
     });
 
-    expect(error).toBeNull();
     expect(data).toBeDefined();
-    expect(data?.rates).toBeDefined();
-    expect(data?.rates['TON']).toBeDefined();
-    expect(data?.rates['TOKEN_WITH_UNDERSCORE']).toBeDefined();
+    expect(data.rates).toBeDefined();
+    expect(data.rates['TON']).toBeDefined();
+    expect(data.rates['TOKEN_WITH_UNDERSCORE']).toBeDefined();
 });
 
 test('getRates, explode in params should be matter', async () => {
     const fetchSpy = mockFetch(getRatesMock);
-    // const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce(
-    //     new Response(JSON.stringify(getRates), {
-    //         status: 200,
-    //         headers: { 'Content-Type': 'application/json' }
-    //     })
-    // );
 
-    await getRatesOp({
+    await ta.getRates({
         tokens: ['TON', 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'],
         currencies: ['USD', 'EUR']
     });
@@ -85,7 +72,7 @@ test('getChartRates, should serialize Address object to string', async () => {
     const addressString = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
     const addressObject = Address.parse(addressString);
 
-    await getChartRates({
+    await ta.getChartRates({
         token: addressObject,
         currency: 'usd'
     });
@@ -104,7 +91,7 @@ test('getChartRates, should accept string token directly', async () => {
 
     const addressString = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
 
-    await getChartRates({
+    await ta.getChartRates({
         token: addressString,
         currency: 'usd'
     });

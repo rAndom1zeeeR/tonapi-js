@@ -6430,13 +6430,13 @@ export class TonApiNetworkError extends TonApiErrorAbstract {
 }
 
 /**
- * Parsing error for Address, Cell, BigInt, or TupleItem
+ * Parsing error for Address, Cell, BigInt, TupleItem, or Unknown
  * Thrown when SDK fails to parse data returned from TonAPI
  *
  * @example
  * ```typescript
  * if (error instanceof TonApiParsingError) {
- *   console.log('Parsing type:', error.parsingType); // 'Address', 'Cell', 'BigInt', 'TupleItem'
+ *   console.log('Parsing type:', error.parsingType); // 'Address', 'Cell', 'BigInt', 'TupleItem', 'Unknown'
  *   console.log('Error message:', error.message);
  *   console.log('Original response:', error.response);
  * }
@@ -6444,11 +6444,11 @@ export class TonApiNetworkError extends TonApiErrorAbstract {
  */
 export class TonApiParsingError extends TonApiErrorAbstract {
     readonly type = 'parsing_error' as const;
-    readonly parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem';
+    readonly parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown';
     readonly response: unknown;
 
     constructor(
-        parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem',
+        parsingType: 'Address' | 'Cell' | 'BigInt' | 'TupleItem' | 'Unknown',
         message: string,
         cause: unknown,
         response: unknown
@@ -6564,45 +6564,39 @@ function parseHexToBigInt(str: string) {
     return str.startsWith('-') ? BigInt(str.slice(1)) * -1n : BigInt(str);
 }
 
-async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promise<Result<U>> {
-    return await promise
+async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promise<U> {
+    return promise
         .then(obj => {
             try {
-                // Parse and transform response data
-                const data = prepareResponseData<U>(obj, orSchema, obj);
-                return { data, error: null } as Result<U>;
+                return prepareResponseData<U>(obj, orSchema, obj);
             } catch (parseError: unknown) {
-                // Handle our custom parsing errors - return the error instance directly
                 if (parseError instanceof TonApiParsingError) {
-                    return {
-                        data: null,
-                        error: parseError
-                    } as Result<U>;
+                    throw parseError;
                 }
 
-                // Handle other errors (should not happen, but defensive)
                 const message =
                     parseError instanceof Error
                         ? `SDK parsing error: ${parseError.message}`
                         : 'SDK parsing error: Unknown error';
 
-                // Create a generic parsing error for unexpected cases
-                return {
-                    data: null,
-                    error: new TonApiParsingError('Cell', message, parseError, obj)
-                } as Result<U>;
+                throw new TonApiParsingError('Unknown', message, parseError, obj);
             }
         })
-        .catch(async response => {
-            // Network error (fetch failed)
-            if (response instanceof Error) {
-                return {
-                    data: null,
-                    error: new TonApiNetworkError(response.message || 'Network error', response)
-                } as Result<U>;
+        .catch((response: any) => {
+            // Re-throw our custom errors without wrapping
+            if (
+                response instanceof TonApiParsingError ||
+                response instanceof TonApiNetworkError ||
+                response instanceof TonApiHttpError ||
+                response instanceof TonApiUnknownError
+            ) {
+                throw response;
             }
 
-            // HTTP error with response
+            if (response instanceof Error) {
+                throw new TonApiNetworkError(response.message || 'Network error', response);
+            }
+
             if (response && typeof response === 'object' && response.status !== undefined) {
                 const status = response.status;
                 const url = response.url || '';
@@ -6624,17 +6618,10 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
                     }
                 }
 
-                return {
-                    data: null,
-                    error: new TonApiHttpError(status, message, url, code, response)
-                } as Result<U>;
+                throw new TonApiHttpError(status, message, url, code, response);
             }
 
-            // Unknown error
-            return {
-                data: null,
-                error: new TonApiUnknownError('Unknown error occurred', response)
-            } as Result<U>;
+            throw new TonApiUnknownError('Unknown error occurred', response);
         });
 }
 
@@ -6824,12 +6811,3520 @@ function prepareRequestData(data: any, orSchema?: any): any {
  * Provide access to indexed TON blockchain
  */
 
-// Singleton HttpClient instance
-let httpClient: HttpClient | null = null;
+/**
+ * TonAPI Client - instance-based approach (recommended)
+ *
+ * @example
+ * ```typescript
+ * const client = new TonApiClient({
+ *   baseUrl: 'https://tonapi.io',
+ *   apiKey: process.env.TON_API_KEY
+ * });
+ *
+ * try {
+ *   const account = await client.getAccount(address);
+ *   console.log(account);
+ * } catch (error) {
+ *   console.error('Error:', error.message);
+ * }
+ * ```
+ */
+export class TonApiClient {
+    private http: HttpClient;
+
+    constructor(apiConfig: ApiConfig = {}) {
+        this.http = new HttpClient(apiConfig);
+    }
+
+    /**
+     * @description Get the openapi.json file
+     *
+     * @tags Utilities
+     * @name GetOpenapiJson
+     * @request GET:/v2/openapi.json
+     */
+    async getOpenapiJson(params: RequestParams = {}) {
+        const req = this.http.request<GetOpenapiJsonData, Error>({
+            path: `/v2/openapi.json`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetOpenapiJsonData>(req, {});
+    }
+
+    /**
+     * @description Get the openapi.yml file
+     *
+     * @tags Utilities
+     * @name GetOpenapiYml
+     * @request GET:/v2/openapi.yml
+     */
+    async getOpenapiYml(params: RequestParams = {}) {
+        const req = this.http.request<GetOpenapiYmlData, Error>({
+            path: `/v2/openapi.yml`,
+            method: 'GET',
+            ...params
+        });
+
+        return prepareResponse<GetOpenapiYmlData>(req);
+    }
+
+    /**
+     * @description Status
+     *
+     * @tags Utilities
+     * @name Status
+     * @request GET:/v2/status
+     */
+    async status(params: RequestParams = {}) {
+        const req = this.http.request<StatusData, Error>({
+            path: `/v2/status`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<StatusData>(req, { $ref: '#/components/schemas/ServiceStatus' });
+    }
+
+    /**
+     * @description parse address and display in all formats
+     *
+     * @tags Utilities
+     * @name AddressParse
+     * @request GET:/v2/address/{account_id}/parse
+     */
+    async addressParse(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<AddressParseData, Error>({
+            path: `/v2/address/${accountId}/parse`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<AddressParseData>(req, {
+            type: 'object',
+            required: ['raw_form', 'bounceable', 'non_bounceable', 'given_type', 'test_only'],
+            properties: {
+                raw_form: { type: 'string', format: 'address' },
+                bounceable: {
+                    required: ['b64', 'b64url'],
+                    type: 'object',
+                    properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
+                },
+                non_bounceable: {
+                    required: ['b64', 'b64url'],
+                    type: 'object',
+                    properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
+                },
+                given_type: { type: 'string' },
+                test_only: { type: 'boolean' }
+            }
+        });
+    }
+
+    /**
+     * @description Get reduced blockchain blocks data
+     *
+     * @tags Blockchain
+     * @name GetReducedBlockchainBlocks
+     * @request GET:/v2/blockchain/reduced/blocks
+     */
+    async getReducedBlockchainBlocks(
+        query: {
+            /** @format int64 */
+            from: number;
+            /** @format int64 */
+            to: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetReducedBlockchainBlocksData, Error>({
+            path: `/v2/blockchain/reduced/blocks`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetReducedBlockchainBlocksData>(req, {
+            $ref: '#/components/schemas/ReducedBlocks'
+        });
+    }
+
+    /**
+     * @description Get blockchain block data
+     *
+     * @tags Blockchain
+     * @name GetBlockchainBlock
+     * @request GET:/v2/blockchain/blocks/{block_id}
+     */
+    async getBlockchainBlock(blockId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainBlockData, Error>({
+            path: `/v2/blockchain/blocks/${blockId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainBlockData>(req, {
+            $ref: '#/components/schemas/BlockchainBlock'
+        });
+    }
+
+    /**
+     * @description Download blockchain block BOC
+     *
+     * @tags Blockchain
+     * @name DownloadBlockchainBlockBoc
+     * @request GET:/v2/blockchain/blocks/{block_id}/boc
+     */
+    async downloadBlockchainBlockBoc(blockId: string, params: RequestParams = {}) {
+        const req = this.http.request<DownloadBlockchainBlockBocData, Error>({
+            path: `/v2/blockchain/blocks/${blockId}/boc`,
+            method: 'GET',
+            ...params
+        });
+
+        return prepareResponse<DownloadBlockchainBlockBocData>(req);
+    }
+
+    /**
+     * @description Get blockchain block shards
+     *
+     * @tags Blockchain
+     * @name GetBlockchainMasterchainShards
+     * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/shards
+     */
+    async getBlockchainMasterchainShards(masterchainSeqno: number, params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainMasterchainShardsData, Error>({
+            path: `/v2/blockchain/masterchain/${masterchainSeqno}/shards`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainMasterchainShardsData>(req, {
+            $ref: '#/components/schemas/BlockchainBlockShards'
+        });
+    }
+
+    /**
+     * @description Get all blocks in all shards and workchains between target and previous masterchain block according to shards last blocks snapshot in masterchain.  We don't recommend to build your app around this method because it has problem with scalability and will work very slow in the future.
+     *
+     * @tags Blockchain
+     * @name GetBlockchainMasterchainBlocks
+     * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/blocks
+     */
+    async getBlockchainMasterchainBlocks(masterchainSeqno: number, params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainMasterchainBlocksData, Error>({
+            path: `/v2/blockchain/masterchain/${masterchainSeqno}/blocks`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainMasterchainBlocksData>(req, {
+            $ref: '#/components/schemas/BlockchainBlocks'
+        });
+    }
+
+    /**
+     * @description Get all transactions in all shards and workchains between target and previous masterchain block according to shards last blocks snapshot in masterchain. We don't recommend to build your app around this method because it has problem with scalability and will work very slow in the future.
+     *
+     * @tags Blockchain
+     * @name GetBlockchainMasterchainTransactions
+     * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/transactions
+     */
+    async getBlockchainMasterchainTransactions(
+        masterchainSeqno: number,
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetBlockchainMasterchainTransactionsData, Error>({
+            path: `/v2/blockchain/masterchain/${masterchainSeqno}/transactions`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainMasterchainTransactionsData>(req, {
+            $ref: '#/components/schemas/Transactions'
+        });
+    }
+
+    /**
+     * @description Get blockchain config from a specific block, if present.
+     *
+     * @tags Blockchain
+     * @name GetBlockchainConfigFromBlock
+     * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config
+     */
+    async getBlockchainConfigFromBlock(masterchainSeqno: number, params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainConfigFromBlockData, Error>({
+            path: `/v2/blockchain/masterchain/${masterchainSeqno}/config`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainConfigFromBlockData>(req, {
+            $ref: '#/components/schemas/BlockchainConfig'
+        });
+    }
+
+    /**
+     * @description Get raw blockchain config from a specific block, if present.
+     *
+     * @tags Blockchain
+     * @name GetRawBlockchainConfigFromBlock
+     * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config/raw
+     */
+    async getRawBlockchainConfigFromBlock(masterchainSeqno: number, params: RequestParams = {}) {
+        const req = this.http.request<GetRawBlockchainConfigFromBlockData, Error>({
+            path: `/v2/blockchain/masterchain/${masterchainSeqno}/config/raw`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawBlockchainConfigFromBlockData>(req, {
+            $ref: '#/components/schemas/RawBlockchainConfig'
+        });
+    }
+
+    /**
+     * @description Get transactions from block
+     *
+     * @tags Blockchain
+     * @name GetBlockchainBlockTransactions
+     * @request GET:/v2/blockchain/blocks/{block_id}/transactions
+     */
+    async getBlockchainBlockTransactions(blockId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainBlockTransactionsData, Error>({
+            path: `/v2/blockchain/blocks/${blockId}/transactions`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainBlockTransactionsData>(req, {
+            $ref: '#/components/schemas/Transactions'
+        });
+    }
+
+    /**
+     * @description Get transaction data
+     *
+     * @tags Blockchain
+     * @name GetBlockchainTransaction
+     * @request GET:/v2/blockchain/transactions/{transaction_id}
+     */
+    async getBlockchainTransaction(transactionId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainTransactionData, Error>({
+            path: `/v2/blockchain/transactions/${transactionId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainTransactionData>(req, {
+            $ref: '#/components/schemas/Transaction'
+        });
+    }
+
+    /**
+     * @description Get transaction data by message hash
+     *
+     * @tags Blockchain
+     * @name GetBlockchainTransactionByMessageHash
+     * @request GET:/v2/blockchain/messages/{msg_id}/transaction
+     */
+    async getBlockchainTransactionByMessageHash(msgId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainTransactionByMessageHashData, Error>({
+            path: `/v2/blockchain/messages/${msgId}/transaction`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainTransactionByMessageHashData>(req, {
+            $ref: '#/components/schemas/Transaction'
+        });
+    }
+
+    /**
+     * @description Get blockchain validators
+     *
+     * @tags Blockchain
+     * @name GetBlockchainValidators
+     * @request GET:/v2/blockchain/validators
+     */
+    async getBlockchainValidators(params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainValidatorsData, Error>({
+            path: `/v2/blockchain/validators`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainValidatorsData>(req, {
+            $ref: '#/components/schemas/Validators'
+        });
+    }
+
+    /**
+     * @description Get last known masterchain block
+     *
+     * @tags Blockchain
+     * @name GetBlockchainMasterchainHead
+     * @request GET:/v2/blockchain/masterchain-head
+     */
+    async getBlockchainMasterchainHead(params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainMasterchainHeadData, Error>({
+            path: `/v2/blockchain/masterchain-head`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainMasterchainHeadData>(req, {
+            $ref: '#/components/schemas/BlockchainBlock'
+        });
+    }
+
+    /**
+     * @description Get low-level information about an account taken directly from the blockchain.
+     *
+     * @tags Blockchain
+     * @name GetBlockchainRawAccount
+     * @request GET:/v2/blockchain/accounts/{account_id}
+     */
+    async getBlockchainRawAccount(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetBlockchainRawAccountData, Error>({
+            path: `/v2/blockchain/accounts/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainRawAccountData>(req, {
+            $ref: '#/components/schemas/BlockchainRawAccount'
+        });
+    }
+
+    /**
+     * @description Get account transactions
+     *
+     * @tags Blockchain
+     * @name GetBlockchainAccountTransactions
+     * @request GET:/v2/blockchain/accounts/{account_id}/transactions
+     */
+    async getBlockchainAccountTransactions(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * omit this parameter to get last transactions
+             * @format bigint
+             * @example 39787624000003
+             */
+            after_lt?: bigint;
+            /**
+             * omit this parameter to get last transactions
+             * @format bigint
+             * @example 39787624000003
+             */
+            before_lt?: bigint;
+            /**
+             * @format int32
+             * @min 1
+             * @max 1000
+             * @default 100
+             * @example 100
+             */
+            limit?: number;
+            /**
+             * used to sort the result-set in ascending or descending order by lt.
+             * @default "desc"
+             */
+            sort_order?: 'desc' | 'asc';
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetBlockchainAccountTransactionsData, Error>({
+            path: `/v2/blockchain/accounts/${accountId}/transactions`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainAccountTransactionsData>(req, {
+            $ref: '#/components/schemas/Transactions'
+        });
+    }
+
+    /**
+     * @description Execute get method for account
+     *
+     * @tags Blockchain
+     * @name ExecGetMethodForBlockchainAccount
+     * @request GET:/v2/blockchain/accounts/{account_id}/methods/{method_name}
+     */
+    async execGetMethodForBlockchainAccount(
+        accountId_Address: Address,
+        methodName: string,
+        query?: {
+            /**
+             * Array of method arguments in string format. Supported value formats:
+             * - "NaN" for Not-a-Number type
+             * - "Null" for Null type
+             * - Decimal integers for tinyint type (e.g., "100500")
+             * - 0x-prefixed hex strings for int257 type (e.g., "0xfa01d78381ae32")
+             * - TON blockchain addresses for slice type (e.g., "0:6e731f2e28b73539a7f85ac47ca104d5840b229351189977bb6151d36b5e3f5e")
+             * - Base64-encoded BOC for cell type (e.g., "te6ccgEBAQEAAgAAAA==")
+             * - Hex-encoded BOC for slice type (e.g., "b5ee9c72010101010002000000")
+             * @example ["0:9a33970f617bcd71acf2cd28357c067aa31859c02820d8f01d74c88063a8f4d8"]
+             */
+            args?: string[];
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<ExecGetMethodForBlockchainAccountData, Error>({
+            path: `/v2/blockchain/accounts/${accountId}/methods/${methodName}`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<ExecGetMethodForBlockchainAccountData>(req, {
+            $ref: '#/components/schemas/MethodExecutionResult'
+        });
+    }
+
+    /**
+     * @description Execute get method for account
+     *
+     * @tags Blockchain
+     * @name ExecGetMethodWithBodyForBlockchainAccount
+     * @request POST:/v2/blockchain/accounts/{account_id}/methods/{method_name}
+     */
+    async execGetMethodWithBodyForBlockchainAccount(
+        accountId_Address: Address,
+        methodName: string,
+        data: {
+            args: ExecGetMethodArg[];
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<ExecGetMethodWithBodyForBlockchainAccountData, Error>({
+            path: `/v2/blockchain/accounts/${accountId}/methods/${methodName}`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['args'],
+                properties: {
+                    args: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/ExecGetMethodArg' }
+                    }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<ExecGetMethodWithBodyForBlockchainAccountData>(req, {
+            $ref: '#/components/schemas/MethodExecutionResult'
+        });
+    }
+
+    /**
+     * @description Send message to blockchain
+     *
+     * @tags Blockchain
+     * @name SendBlockchainMessage
+     * @request POST:/v2/blockchain/message
+     */
+    async sendBlockchainMessage(
+        data: {
+            /** @format cell */
+            boc?: Cell;
+            /** @maxItems 5 */
+            batch?: Cell[];
+            meta?: Record<string, string>;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<SendBlockchainMessageData, Error>({
+            path: `/v2/blockchain/message`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                properties: {
+                    boc: { type: 'string', format: 'cell' },
+                    batch: {
+                        type: 'array',
+                        maxItems: 5,
+                        items: { type: 'string', format: 'cell' }
+                    },
+                    meta: { type: 'object', additionalProperties: { type: 'string' } }
+                }
+            }),
+            ...params
+        });
+
+        return prepareResponse<SendBlockchainMessageData>(req);
+    }
+
+    /**
+     * @description Get blockchain config
+     *
+     * @tags Blockchain
+     * @name GetBlockchainConfig
+     * @request GET:/v2/blockchain/config
+     */
+    async getBlockchainConfig(params: RequestParams = {}) {
+        const req = this.http.request<GetBlockchainConfigData, Error>({
+            path: `/v2/blockchain/config`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetBlockchainConfigData>(req, {
+            $ref: '#/components/schemas/BlockchainConfig'
+        });
+    }
+
+    /**
+     * @description Get raw blockchain config
+     *
+     * @tags Blockchain
+     * @name GetRawBlockchainConfig
+     * @request GET:/v2/blockchain/config/raw
+     */
+    async getRawBlockchainConfig(params: RequestParams = {}) {
+        const req = this.http.request<GetRawBlockchainConfigData, Error>({
+            path: `/v2/blockchain/config/raw`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawBlockchainConfigData>(req, {
+            $ref: '#/components/schemas/RawBlockchainConfig'
+        });
+    }
+
+    /**
+     * @description Blockchain account inspect
+     *
+     * @tags Blockchain
+     * @name BlockchainAccountInspect
+     * @request GET:/v2/blockchain/accounts/{account_id}/inspect
+     */
+    async blockchainAccountInspect(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<BlockchainAccountInspectData, Error>({
+            path: `/v2/blockchain/accounts/${accountId}/inspect`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<BlockchainAccountInspectData>(req, {
+            $ref: '#/components/schemas/BlockchainAccountInspect'
+        });
+    }
+
+    /**
+     * @description Get library cell
+     *
+     * @tags Blockchain
+     * @name GetLibraryByHash
+     * @request GET:/v2/blockchain/libraries/{hash}
+     */
+    async getLibraryByHash(hash: string, params: RequestParams = {}) {
+        const req = this.http.request<GetLibraryByHashData, Error>({
+            path: `/v2/blockchain/libraries/${hash}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetLibraryByHashData>(req, {
+            $ref: '#/components/schemas/BlockchainLibrary'
+        });
+    }
+
+    /**
+     * @description Get human-friendly information about several accounts without low-level details.
+     *
+     * @tags Accounts
+     * @name GetAccounts
+     * @request POST:/v2/accounts/_bulk
+     */
+    async getAccounts(
+        data: {
+            accountIds: Address[];
+        },
+        query?: {
+            /** @example "usd" */
+            currency?: string;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetAccountsData, Error>({
+            path: `/v2/accounts/_bulk`,
+            method: 'POST',
+            query: query,
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['accountIds'],
+                properties: {
+                    accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountsData>(req, { $ref: '#/components/schemas/Accounts' });
+    }
+
+    /**
+     * @description Get human-friendly information about an account without low-level details.
+     *
+     * @tags Accounts
+     * @name GetAccount
+     * @request GET:/v2/accounts/{account_id}
+     */
+    async getAccount(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountData, Error>({
+            path: `/v2/accounts/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountData>(req, { $ref: '#/components/schemas/Account' });
+    }
+
+    /**
+     * @description Get account's domains
+     *
+     * @tags Accounts
+     * @name AccountDnsBackResolve
+     * @request GET:/v2/accounts/{account_id}/dns/backresolve
+     */
+    async accountDnsBackResolve(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<AccountDnsBackResolveData, Error>({
+            path: `/v2/accounts/${accountId}/dns/backresolve`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<AccountDnsBackResolveData>(req, {
+            $ref: '#/components/schemas/DomainNames'
+        });
+    }
+
+    /**
+     * @description Get all Jettons balances by owner address
+     *
+     * @tags Accounts
+     * @name GetAccountJettonsBalances
+     * @request GET:/v2/accounts/{account_id}/jettons
+     */
+    async getAccountJettonsBalances(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * accept ton and all possible fiat currencies, separated by commas
+             * @example ["ton","usd","rub"]
+             */
+            currencies?: string[];
+            /**
+             * comma separated list supported extensions
+             * @example ["custom_payload"]
+             */
+            supported_extensions?: string[];
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountJettonsBalancesData, Error>({
+            path: `/v2/accounts/${accountId}/jettons`,
+            method: 'GET',
+            query: query,
+            queryImplode: ['currencies', 'supported_extensions'],
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountJettonsBalancesData>(req, {
+            $ref: '#/components/schemas/JettonsBalances'
+        });
+    }
+
+    /**
+     * @description Get Jetton balance by owner address
+     *
+     * @tags Accounts
+     * @name GetAccountJettonBalance
+     * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}
+     */
+    async getAccountJettonBalance(
+        accountId_Address: Address,
+        jettonId_Address: Address,
+        query?: {
+            /**
+             * accept ton and all possible fiat currencies, separated by commas
+             * @example ["ton","usd","rub"]
+             */
+            currencies?: string[];
+            /**
+             * comma separated list supported extensions
+             * @example ["custom_payload"]
+             */
+            supported_extensions?: string[];
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const jettonId = jettonId_Address.toRawString();
+        const req = this.http.request<GetAccountJettonBalanceData, Error>({
+            path: `/v2/accounts/${accountId}/jettons/${jettonId}`,
+            method: 'GET',
+            query: query,
+            queryImplode: ['currencies', 'supported_extensions'],
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountJettonBalanceData>(req, {
+            $ref: '#/components/schemas/JettonBalance'
+        });
+    }
+
+    /**
+     * @description Get the transfer jettons history for account
+     *
+     * @tags Accounts
+     * @name GetAccountJettonsHistory
+     * @request GET:/v2/accounts/{account_id}/jettons/history
+     */
+    async getAccountJettonsHistory(
+        accountId_Address: Address,
+        query: {
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @example 100
+             */
+            limit: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountJettonsHistoryData, Error>({
+            path: `/v2/accounts/${accountId}/jettons/history`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountJettonsHistoryData>(req, {
+            $ref: '#/components/schemas/JettonOperations'
+        });
+    }
+
+    /**
+     * @description Please use `getJettonAccountHistoryByID`` instead
+     *
+     * @tags Accounts
+     * @name GetAccountJettonHistoryById
+     * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}/history
+     * @deprecated
+     */
+    async getAccountJettonHistoryById(
+        accountId_Address: Address,
+        jettonId_Address: Address,
+        query: {
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @example 100
+             */
+            limit: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            start_date?: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            end_date?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const jettonId = jettonId_Address.toRawString();
+        const req = this.http.request<GetAccountJettonHistoryByIdData, Error>({
+            path: `/v2/accounts/${accountId}/jettons/${jettonId}/history`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountJettonHistoryByIdData>(req, {
+            $ref: '#/components/schemas/AccountEvents'
+        });
+    }
+
+    /**
+     * @description Get all NFT items by owner address
+     *
+     * @tags Accounts
+     * @name GetAccountNftItems
+     * @request GET:/v2/accounts/{account_id}/nfts
+     */
+    async getAccountNftItems(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * nft collection
+             * @format address
+             * @example "0:06d811f426598591b32b2c49f29f66c821368e4acb1de16762b04e0174532465"
+             */
+            collection?: Address;
+            /**
+             * @min 1
+             * @max 1000
+             * @default 1000
+             */
+            limit?: number;
+            /**
+             * @min 0
+             * @default 0
+             */
+            offset?: number;
+            /**
+             * Selling nft items in ton implemented usually via transfer items to special selling account. This option enables including items which owned not directly.
+             * @default false
+             */
+            indirect_ownership?: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountNftItemsData, Error>({
+            path: `/v2/accounts/${accountId}/nfts`,
+            method: 'GET',
+            query: query && {
+                ...query,
+                collection: query.collection?.toRawString()
+            },
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountNftItemsData>(req, {
+            $ref: '#/components/schemas/NftItems'
+        });
+    }
+
+    /**
+     * @description Get events for an account. Each event is built on top of a trace which is a series of transactions caused by one inbound message. TonAPI looks for known patterns inside the trace and splits the trace into actions, where a single action represents a meaningful high-level operation like a Jetton Transfer or an NFT Purchase. Actions are expected to be shown to users. It is advised not to build any logic on top of actions because actions can be changed at any time.
+     *
+     * @tags Accounts
+     * @name GetAccountEvents
+     * @request GET:/v2/accounts/{account_id}/events
+     */
+    async getAccountEvents(
+        accountId_Address: Address,
+        query: {
+            /**
+             * Show only events that are initiated by this account
+             * @default false
+             */
+            initiator?: boolean;
+            /**
+             * filter actions where requested account is not real subject (for example sender or receiver jettons)
+             * @default false
+             */
+            subject_only?: boolean;
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 100
+             * @example 20
+             */
+            limit: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            start_date?: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            end_date?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountEventsData, Error>({
+            path: `/v2/accounts/${accountId}/events`,
+            method: 'GET',
+            query: query,
+            queryImplode: ['initiator'],
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountEventsData>(req, {
+            $ref: '#/components/schemas/AccountEvents'
+        });
+    }
+
+    /**
+     * @description Get event for an account by event_id
+     *
+     * @tags Accounts
+     * @name GetAccountEvent
+     * @request GET:/v2/accounts/{account_id}/events/{event_id}
+     */
+    async getAccountEvent(
+        accountId_Address: Address,
+        eventId: string,
+        query?: {
+            /**
+             * filter actions where requested account is not real subject (for example sender or receiver jettons)
+             * @default false
+             */
+            subject_only?: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountEventData, Error>({
+            path: `/v2/accounts/${accountId}/events/${eventId}`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountEventData>(req, {
+            $ref: '#/components/schemas/AccountEvent'
+        });
+    }
+
+    /**
+     * @description Get traces for account
+     *
+     * @tags Accounts
+     * @name GetAccountTraces
+     * @request GET:/v2/accounts/{account_id}/traces
+     */
+    async getAccountTraces(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @default 100
+             * @example 100
+             */
+            limit?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountTracesData, Error>({
+            path: `/v2/accounts/${accountId}/traces`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountTracesData>(req, {
+            $ref: '#/components/schemas/TraceIDs'
+        });
+    }
+
+    /**
+     * @description Get all subscriptions by wallet address
+     *
+     * @tags Accounts
+     * @name GetAccountSubscriptions
+     * @request GET:/v2/accounts/{account_id}/subscriptions
+     */
+    async getAccountSubscriptions(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountSubscriptionsData, Error>({
+            path: `/v2/accounts/${accountId}/subscriptions`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountSubscriptionsData>(req, {
+            $ref: '#/components/schemas/Subscriptions'
+        });
+    }
+
+    /**
+     * @description Update internal cache for a particular account
+     *
+     * @tags Accounts
+     * @name ReindexAccount
+     * @request POST:/v2/accounts/{account_id}/reindex
+     */
+    async reindexAccount(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<ReindexAccountData, Error>({
+            path: `/v2/accounts/${accountId}/reindex`,
+            method: 'POST',
+            ...params
+        });
+
+        return prepareResponse<ReindexAccountData>(req);
+    }
+
+    /**
+     * @description Search by account domain name
+     *
+     * @tags Accounts
+     * @name SearchAccounts
+     * @request GET:/v2/accounts/search
+     */
+    async searchAccounts(
+        query: {
+            /**
+             * @minLength 3
+             * @maxLength 15
+             */
+            name: string;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<SearchAccountsData, Error>({
+            path: `/v2/accounts/search`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<SearchAccountsData>(req, {
+            $ref: '#/components/schemas/FoundAccounts'
+        });
+    }
+
+    /**
+     * @description Get expiring account .ton dns
+     *
+     * @tags Accounts
+     * @name GetAccountDnsExpiring
+     * @request GET:/v2/accounts/{account_id}/dns/expiring
+     */
+    async getAccountDnsExpiring(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * number of days before expiration
+             * @min 1
+             * @max 3660
+             */
+            period?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountDnsExpiringData, Error>({
+            path: `/v2/accounts/${accountId}/dns/expiring`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountDnsExpiringData>(req, {
+            $ref: '#/components/schemas/DnsExpiring'
+        });
+    }
+
+    /**
+     * @description Get public key by account id
+     *
+     * @tags Accounts
+     * @name GetAccountPublicKey
+     * @request GET:/v2/accounts/{account_id}/publickey
+     */
+    async getAccountPublicKey(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountPublicKeyData, Error>({
+            path: `/v2/accounts/${accountId}/publickey`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountPublicKeyData>(req, {
+            type: 'object',
+            required: ['public_key'],
+            properties: { public_key: { type: 'string' } }
+        });
+    }
+
+    /**
+     * @description Get account's multisigs
+     *
+     * @tags Accounts
+     * @name GetAccountMultisigs
+     * @request GET:/v2/accounts/{account_id}/multisigs
+     */
+    async getAccountMultisigs(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountMultisigsData, Error>({
+            path: `/v2/accounts/${accountId}/multisigs`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountMultisigsData>(req, {
+            $ref: '#/components/schemas/Multisigs'
+        });
+    }
+
+    /**
+     * @description Get account's balance change
+     *
+     * @tags Accounts
+     * @name GetAccountDiff
+     * @request GET:/v2/accounts/{account_id}/diff
+     */
+    async getAccountDiff(
+        accountId_Address: Address,
+        query: {
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            start_date: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            end_date: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountDiffData, Error>({
+            path: `/v2/accounts/${accountId}/diff`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountDiffData>(req, {
+            type: 'object',
+            required: ['balance_change'],
+            properties: { balance_change: { type: 'integer', format: 'int64' } }
+        });
+    }
+
+    /**
+     * @description Get the transfer history of extra currencies for an account.
+     *
+     * @tags Accounts
+     * @name GetAccountExtraCurrencyHistoryById
+     * @request GET:/v2/accounts/{account_id}/extra-currency/{id}/history
+     */
+    async getAccountExtraCurrencyHistoryById(
+        accountId_Address: Address,
+        id: number,
+        query: {
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @example 100
+             */
+            limit: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            start_date?: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            end_date?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountExtraCurrencyHistoryByIdData, Error>({
+            path: `/v2/accounts/${accountId}/extra-currency/${id}/history`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountExtraCurrencyHistoryByIdData>(req, {
+            $ref: '#/components/schemas/AccountEvents'
+        });
+    }
+
+    /**
+     * @description Get the transfer jetton history for account and jetton
+     *
+     * @tags Accounts
+     * @name GetJettonAccountHistoryById
+     * @request GET:/v2/jettons/{jetton_id}/accounts/{account_id}/history
+     */
+    async getJettonAccountHistoryById(
+        accountId_Address: Address,
+        jettonId_Address: Address,
+        query: {
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @example 100
+             */
+            limit: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            start_date?: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            end_date?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const jettonId = jettonId_Address.toRawString();
+        const req = this.http.request<GetJettonAccountHistoryByIdData, Error>({
+            path: `/v2/jettons/${jettonId}/accounts/${accountId}/history`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetJettonAccountHistoryByIdData>(req, {
+            $ref: '#/components/schemas/JettonOperations'
+        });
+    }
+
+    /**
+     * @description Get the transfer nft history
+     *
+     * @tags NFT
+     * @name GetAccountNftHistory
+     * @request GET:/v2/accounts/{account_id}/nfts/history
+     */
+    async getAccountNftHistory(
+        accountId_Address: Address,
+        query: {
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @example 100
+             */
+            limit: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountNftHistoryData, Error>({
+            path: `/v2/accounts/${accountId}/nfts/history`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountNftHistoryData>(req, {
+            $ref: '#/components/schemas/NftOperations'
+        });
+    }
+
+    /**
+     * @description Get NFT collections
+     *
+     * @tags NFT
+     * @name GetNftCollections
+     * @request GET:/v2/nfts/collections
+     */
+    async getNftCollections(
+        query?: {
+            /**
+             * @format int32
+             * @min 1
+             * @max 1000
+             * @default 100
+             * @example 15
+             */
+            limit?: number;
+            /**
+             * @format int32
+             * @min 0
+             * @default 0
+             * @example 10
+             */
+            offset?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetNftCollectionsData, Error>({
+            path: `/v2/nfts/collections`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetNftCollectionsData>(req, {
+            $ref: '#/components/schemas/NftCollections'
+        });
+    }
+
+    /**
+     * @description Get NFT collection by collection address
+     *
+     * @tags NFT
+     * @name GetNftCollection
+     * @request GET:/v2/nfts/collections/{account_id}
+     */
+    async getNftCollection(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetNftCollectionData, Error>({
+            path: `/v2/nfts/collections/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetNftCollectionData>(req, {
+            $ref: '#/components/schemas/NftCollection'
+        });
+    }
+
+    /**
+     * @description Get NFT collection items by their addresses
+     *
+     * @tags NFT
+     * @name GetNftCollectionItemsByAddresses
+     * @request POST:/v2/nfts/collections/_bulk
+     */
+    async getNftCollectionItemsByAddresses(
+        data: {
+            accountIds: Address[];
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetNftCollectionItemsByAddressesData, Error>({
+            path: `/v2/nfts/collections/_bulk`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['accountIds'],
+                properties: {
+                    accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetNftCollectionItemsByAddressesData>(req, {
+            $ref: '#/components/schemas/NftCollections'
+        });
+    }
+
+    /**
+     * @description Get NFT items from collection by collection address
+     *
+     * @tags NFT
+     * @name GetItemsFromCollection
+     * @request GET:/v2/nfts/collections/{account_id}/items
+     */
+    async getItemsFromCollection(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * @min 1
+             * @max 1000
+             * @default 1000
+             */
+            limit?: number;
+            /**
+             * @min 0
+             * @default 0
+             */
+            offset?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetItemsFromCollectionData, Error>({
+            path: `/v2/nfts/collections/${accountId}/items`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetItemsFromCollectionData>(req, {
+            $ref: '#/components/schemas/NftItems'
+        });
+    }
+
+    /**
+     * @description Get NFT items by their addresses
+     *
+     * @tags NFT
+     * @name GetNftItemsByAddresses
+     * @request POST:/v2/nfts/_bulk
+     */
+    async getNftItemsByAddresses(
+        data: {
+            accountIds: Address[];
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetNftItemsByAddressesData, Error>({
+            path: `/v2/nfts/_bulk`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['accountIds'],
+                properties: {
+                    accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetNftItemsByAddressesData>(req, {
+            $ref: '#/components/schemas/NftItems'
+        });
+    }
+
+    /**
+     * @description Get NFT item by its address
+     *
+     * @tags NFT
+     * @name GetNftItemByAddress
+     * @request GET:/v2/nfts/{account_id}
+     */
+    async getNftItemByAddress(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetNftItemByAddressData, Error>({
+            path: `/v2/nfts/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetNftItemByAddressData>(req, {
+            $ref: '#/components/schemas/NftItem'
+        });
+    }
+
+    /**
+     * @description Please use `getAccountNftHistory`` instead
+     *
+     * @tags NFT
+     * @name GetNftHistoryById
+     * @request GET:/v2/nfts/{account_id}/history
+     * @deprecated
+     */
+    async getNftHistoryById(
+        accountId_Address: Address,
+        query: {
+            /**
+             * omit this parameter to get last events
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @example 100
+             */
+            limit: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            start_date?: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            end_date?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetNftHistoryByIdData, Error>({
+            path: `/v2/nfts/${accountId}/history`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetNftHistoryByIdData>(req, {
+            $ref: '#/components/schemas/AccountEvents'
+        });
+    }
+
+    /**
+     * @description Get full information about domain name
+     *
+     * @tags DNS
+     * @name GetDnsInfo
+     * @request GET:/v2/dns/{domain_name}
+     */
+    async getDnsInfo(domainName: string, params: RequestParams = {}) {
+        const req = this.http.request<GetDnsInfoData, Error>({
+            path: `/v2/dns/${domainName}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetDnsInfoData>(req, { $ref: '#/components/schemas/DomainInfo' });
+    }
+
+    /**
+     * @description DNS resolve for domain name
+     *
+     * @tags DNS
+     * @name DnsResolve
+     * @request GET:/v2/dns/{domain_name}/resolve
+     */
+    async dnsResolve(
+        domainName: string,
+        query?: {
+            /** @default false */
+            filter?: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<DnsResolveData, Error>({
+            path: `/v2/dns/${domainName}/resolve`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<DnsResolveData>(req, { $ref: '#/components/schemas/DnsRecord' });
+    }
+
+    /**
+     * @description Get domain bids
+     *
+     * @tags DNS
+     * @name GetDomainBids
+     * @request GET:/v2/dns/{domain_name}/bids
+     */
+    async getDomainBids(domainName: string, params: RequestParams = {}) {
+        const req = this.http.request<GetDomainBidsData, Error>({
+            path: `/v2/dns/${domainName}/bids`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetDomainBidsData>(req, { $ref: '#/components/schemas/DomainBids' });
+    }
+
+    /**
+     * @description Get all auctions
+     *
+     * @tags DNS
+     * @name GetAllAuctions
+     * @request GET:/v2/dns/auctions
+     */
+    async getAllAuctions(
+        query?: {
+            /**
+             * domain filter for current auctions "ton" or "t.me"
+             * @example "ton"
+             */
+            tld?: string;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetAllAuctionsData, Error>({
+            path: `/v2/dns/auctions`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAllAuctionsData>(req, { $ref: '#/components/schemas/Auctions' });
+    }
+
+    /**
+     * @description Get the trace by trace ID or hash of any transaction in trace
+     *
+     * @tags Traces
+     * @name GetTrace
+     * @request GET:/v2/traces/{trace_id}
+     */
+    async getTrace(traceId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetTraceData, Error>({
+            path: `/v2/traces/${traceId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetTraceData>(req, { $ref: '#/components/schemas/Trace' });
+    }
+
+    /**
+     * @description Get an event either by event ID or a hash of any transaction in a trace. An event is built on top of a trace which is a series of transactions caused by one inbound message. TonAPI looks for known patterns inside the trace and splits the trace into actions, where a single action represents a meaningful high-level operation like a Jetton Transfer or an NFT Purchase. Actions are expected to be shown to users. It is advised not to build any logic on top of actions because actions can be changed at any time.
+     *
+     * @tags Events
+     * @name GetEvent
+     * @request GET:/v2/events/{event_id}
+     */
+    async getEvent(eventId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetEventData, Error>({
+            path: `/v2/events/${eventId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetEventData>(req, { $ref: '#/components/schemas/Event' });
+    }
+
+    /**
+     * @description Get a list of all indexed jetton masters in the blockchain.
+     *
+     * @tags Jettons
+     * @name GetJettons
+     * @request GET:/v2/jettons
+     */
+    async getJettons(
+        query?: {
+            /**
+             * @format int32
+             * @min 1
+             * @max 1000
+             * @default 100
+             * @example 15
+             */
+            limit?: number;
+            /**
+             * @format int32
+             * @min 0
+             * @default 0
+             * @example 10
+             */
+            offset?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetJettonsData, Error>({
+            path: `/v2/jettons`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetJettonsData>(req, { $ref: '#/components/schemas/Jettons' });
+    }
+
+    /**
+     * @description Get jetton metadata by jetton master address
+     *
+     * @tags Jettons
+     * @name GetJettonInfo
+     * @request GET:/v2/jettons/{account_id}
+     */
+    async getJettonInfo(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetJettonInfoData, Error>({
+            path: `/v2/jettons/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetJettonInfoData>(req, { $ref: '#/components/schemas/JettonInfo' });
+    }
+
+    /**
+     * @description Get jetton metadata items by jetton master addresses
+     *
+     * @tags Jettons
+     * @name GetJettonInfosByAddresses
+     * @request POST:/v2/jettons/_bulk
+     */
+    async getJettonInfosByAddresses(
+        data: {
+            accountIds: Address[];
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetJettonInfosByAddressesData, Error>({
+            path: `/v2/jettons/_bulk`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['accountIds'],
+                properties: {
+                    accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetJettonInfosByAddressesData>(req, {
+            $ref: '#/components/schemas/Jettons'
+        });
+    }
+
+    /**
+     * @description Get jetton's holders
+     *
+     * @tags Jettons
+     * @name GetJettonHolders
+     * @request GET:/v2/jettons/{account_id}/holders
+     */
+    async getJettonHolders(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * @min 1
+             * @max 1000
+             * @default 1000
+             */
+            limit?: number;
+            /**
+             * @min 0
+             * @max 9000
+             * @default 0
+             */
+            offset?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetJettonHoldersData, Error>({
+            path: `/v2/jettons/${accountId}/holders`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetJettonHoldersData>(req, {
+            $ref: '#/components/schemas/JettonHolders'
+        });
+    }
+
+    /**
+     * @description Get jetton's custom payload and state init required for transfer
+     *
+     * @tags Jettons
+     * @name GetJettonTransferPayload
+     * @request GET:/v2/jettons/{jetton_id}/transfer/{account_id}/payload
+     */
+    async getJettonTransferPayload(
+        accountId_Address: Address,
+        jettonId_Address: Address,
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const jettonId = jettonId_Address.toRawString();
+        const req = this.http.request<GetJettonTransferPayloadData, Error>({
+            path: `/v2/jettons/${jettonId}/transfer/${accountId}/payload`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetJettonTransferPayloadData>(req, {
+            $ref: '#/components/schemas/JettonTransferPayload'
+        });
+    }
+
+    /**
+     * @description Get only jetton transfers in the event
+     *
+     * @tags Jettons
+     * @name GetJettonsEvents
+     * @request GET:/v2/events/{event_id}/jettons
+     */
+    async getJettonsEvents(eventId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetJettonsEventsData, Error>({
+            path: `/v2/events/${eventId}/jettons`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetJettonsEventsData>(req, { $ref: '#/components/schemas/Event' });
+    }
+
+    /**
+     * @description Get extra currency info by id
+     *
+     * @tags ExtraCurrency
+     * @name GetExtraCurrencyInfo
+     * @request GET:/v2/extra-currency/{id}
+     */
+    async getExtraCurrencyInfo(id: number, params: RequestParams = {}) {
+        const req = this.http.request<GetExtraCurrencyInfoData, Error>({
+            path: `/v2/extra-currency/${id}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetExtraCurrencyInfoData>(req, {
+            $ref: '#/components/schemas/EcPreview'
+        });
+    }
+
+    /**
+     * @description All pools where account participates
+     *
+     * @tags Staking
+     * @name GetAccountNominatorsPools
+     * @request GET:/v2/staking/nominator/{account_id}/pools
+     */
+    async getAccountNominatorsPools(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountNominatorsPoolsData, Error>({
+            path: `/v2/staking/nominator/${accountId}/pools`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountNominatorsPoolsData>(req, {
+            $ref: '#/components/schemas/AccountStaking'
+        });
+    }
+
+    /**
+     * @description Stacking pool info
+     *
+     * @tags Staking
+     * @name GetStakingPoolInfo
+     * @request GET:/v2/staking/pool/{account_id}
+     */
+    async getStakingPoolInfo(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetStakingPoolInfoData, Error>({
+            path: `/v2/staking/pool/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetStakingPoolInfoData>(req, {
+            type: 'object',
+            required: ['implementation', 'pool'],
+            properties: {
+                implementation: { $ref: '#/components/schemas/PoolImplementation' },
+                pool: { $ref: '#/components/schemas/PoolInfo' }
+            }
+        });
+    }
+
+    /**
+     * @description Pool history
+     *
+     * @tags Staking
+     * @name GetStakingPoolHistory
+     * @request GET:/v2/staking/pool/{account_id}/history
+     */
+    async getStakingPoolHistory(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetStakingPoolHistoryData, Error>({
+            path: `/v2/staking/pool/${accountId}/history`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetStakingPoolHistoryData>(req, {
+            type: 'object',
+            required: ['apy'],
+            properties: {
+                apy: { type: 'array', items: { $ref: '#/components/schemas/ApyHistory' } }
+            }
+        });
+    }
+
+    /**
+     * @description All pools available in network
+     *
+     * @tags Staking
+     * @name GetStakingPools
+     * @request GET:/v2/staking/pools
+     */
+    async getStakingPools(
+        query?: {
+            /**
+             * account ID
+             * @format address
+             * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
+             */
+            available_for?: Address;
+            /**
+             * return also pools not from white list - just compatible by interfaces (maybe dangerous!)
+             * @example false
+             */
+            include_unverified?: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetStakingPoolsData, Error>({
+            path: `/v2/staking/pools`,
+            method: 'GET',
+            query: query && {
+                ...query,
+                available_for: query.available_for?.toRawString()
+            },
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetStakingPoolsData>(req, {
+            type: 'object',
+            required: ['pools', 'implementations'],
+            properties: {
+                pools: { type: 'array', items: { $ref: '#/components/schemas/PoolInfo' } },
+                implementations: {
+                    type: 'object',
+                    additionalProperties: { $ref: '#/components/schemas/PoolImplementation' }
+                }
+            }
+        });
+    }
+
+    /**
+     * @description Get TON storage providers deployed to the blockchain.
+     *
+     * @tags Storage
+     * @name GetStorageProviders
+     * @request GET:/v2/storage/providers
+     */
+    async getStorageProviders(params: RequestParams = {}) {
+        const req = this.http.request<GetStorageProvidersData, Error>({
+            path: `/v2/storage/providers`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetStorageProvidersData>(req, {
+            type: 'object',
+            required: ['providers'],
+            properties: {
+                providers: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/StorageProvider' }
+                }
+            }
+        });
+    }
+
+    /**
+     * @description Get the token price in the chosen currency for display only. Don’t use this for financial transactions.
+     *
+     * @tags Rates
+     * @name GetRates
+     * @request GET:/v2/rates
+     */
+    async getRates(
+        query: {
+            /**
+             * accept cryptocurrencies or jetton master addresses, separated by commas
+             * @maxItems 100
+             * @example ["ton"]
+             */
+            tokens: (Address | string)[];
+            /**
+             * accept cryptocurrencies and all possible fiat currencies, separated by commas
+             * @maxItems 50
+             * @example ["ton","usd","rub"]
+             */
+            currencies: string[];
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetRatesData, Error>({
+            path: `/v2/rates`,
+            method: 'GET',
+            query: query,
+            queryImplode: ['tokens', 'currencies'],
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRatesData>(req, {
+            type: 'object',
+            required: ['rates'],
+            properties: {
+                rates: {
+                    type: 'object',
+                    additionalProperties: { $ref: '#/components/schemas/TokenRates' }
+                }
+            }
+        });
+    }
+
+    /**
+     * @description Get chart by token
+     *
+     * @tags Rates
+     * @name GetChartRates
+     * @request GET:/v2/rates/chart
+     */
+    async getChartRates(
+        query: {
+            /** accept cryptocurrencies or jetton master addresses */
+            token: Address | string;
+            /** @example "usd" */
+            currency?: string;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            start_date?: number;
+            /**
+             * @format int64
+             * @max 2114380800
+             * @example 1668436763
+             */
+            end_date?: number;
+            /**
+             * @format int
+             * @min 0
+             * @max 200
+             * @default 200
+             */
+            points_count?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetChartRatesData, Error>({
+            path: `/v2/rates/chart`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetChartRatesData>(req, {
+            type: 'object',
+            required: ['points'],
+            properties: {
+                points: { type: 'array', items: { $ref: '#/components/schemas/ChartPoints' } }
+            }
+        });
+    }
+
+    /**
+     * @description Get the TON price from markets
+     *
+     * @tags Rates
+     * @name GetMarketsRates
+     * @request GET:/v2/rates/markets
+     */
+    async getMarketsRates(params: RequestParams = {}) {
+        const req = this.http.request<GetMarketsRatesData, Error>({
+            path: `/v2/rates/markets`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetMarketsRatesData>(req, {
+            type: 'object',
+            required: ['markets'],
+            properties: {
+                markets: { type: 'array', items: { $ref: '#/components/schemas/MarketTonRates' } }
+            }
+        });
+    }
+
+    /**
+     * @description Get a payload for further token receipt
+     *
+     * @tags Connect
+     * @name GetTonConnectPayload
+     * @request GET:/v2/tonconnect/payload
+     */
+    async getTonConnectPayload(params: RequestParams = {}) {
+        const req = this.http.request<GetTonConnectPayloadData, Error>({
+            path: `/v2/tonconnect/payload`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetTonConnectPayloadData>(req, {
+            type: 'object',
+            required: ['payload'],
+            properties: { payload: { type: 'string' } }
+        });
+    }
+
+    /**
+     * @description Get account info by state init
+     *
+     * @tags Connect
+     * @name GetAccountInfoByStateInit
+     * @request POST:/v2/tonconnect/stateinit
+     */
+    async getAccountInfoByStateInit(
+        data: {
+            /** @format cell-base64 */
+            stateInit: Cell;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetAccountInfoByStateInitData, Error>({
+            path: `/v2/tonconnect/stateinit`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['stateInit'],
+                properties: { stateInit: { type: 'string', format: 'cell-base64' } }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountInfoByStateInitData>(req, {
+            $ref: '#/components/schemas/AccountInfoByStateInit'
+        });
+    }
+
+    /**
+     * @description Account verification and token issuance
+     *
+     * @tags Wallet
+     * @name TonConnectProof
+     * @request POST:/v2/wallet/auth/proof
+     */
+    async tonConnectProof(
+        data: {
+            /**
+             * @format address
+             * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
+             */
+            address: Address;
+            proof: {
+                /**
+                 * @format int64
+                 * @example "1678275313"
+                 */
+                timestamp: number;
+                domain: {
+                    /** @format int32 */
+                    lengthBytes?: number;
+                    value: string;
+                };
+                signature: string;
+                /** @example "84jHVNLQmZsAAAAAZB0Zryi2wqVJI-KaKNXOvCijEi46YyYzkaSHyJrMPBMOkVZa" */
+                payload: string;
+                /** @format cell-base64 */
+                stateInit?: Cell;
+            };
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<TonConnectProofData, Error>({
+            path: `/v2/wallet/auth/proof`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['address', 'proof'],
+                properties: {
+                    address: { type: 'string', format: 'address' },
+                    proof: {
+                        type: 'object',
+                        required: ['timestamp', 'domain', 'signature', 'payload'],
+                        properties: {
+                            timestamp: { type: 'integer', format: 'int64' },
+                            domain: {
+                                type: 'object',
+                                required: ['value'],
+                                properties: {
+                                    lengthBytes: { type: 'integer', format: 'int32' },
+                                    value: { type: 'string' }
+                                }
+                            },
+                            signature: { type: 'string' },
+                            payload: { type: 'string' },
+                            stateInit: { type: 'string', format: 'cell-base64' }
+                        }
+                    }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<TonConnectProofData>(req, {
+            type: 'object',
+            required: ['token'],
+            properties: { token: { type: 'string' } }
+        });
+    }
+
+    /**
+     * @description Get account seqno
+     *
+     * @tags Wallet
+     * @name GetAccountSeqno
+     * @request GET:/v2/wallet/{account_id}/seqno
+     */
+    async getAccountSeqno(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetAccountSeqnoData, Error>({
+            path: `/v2/wallet/${accountId}/seqno`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAccountSeqnoData>(req, { $ref: '#/components/schemas/Seqno' });
+    }
+
+    /**
+     * @description Get human-friendly information about a wallet without low-level details.
+     *
+     * @tags Wallet
+     * @name GetWalletInfo
+     * @request GET:/v2/wallet/{account_id}
+     */
+    async getWalletInfo(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetWalletInfoData, Error>({
+            path: `/v2/wallet/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetWalletInfoData>(req, { $ref: '#/components/schemas/Wallet' });
+    }
+
+    /**
+     * @description Get wallets by public key
+     *
+     * @tags Wallet
+     * @name GetWalletsByPublicKey
+     * @request GET:/v2/pubkeys/{public_key}/wallets
+     */
+    async getWalletsByPublicKey(publicKey: string, params: RequestParams = {}) {
+        const req = this.http.request<GetWalletsByPublicKeyData, Error>({
+            path: `/v2/pubkeys/${publicKey}/wallets`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetWalletsByPublicKeyData>(req, {
+            $ref: '#/components/schemas/Wallets'
+        });
+    }
+
+    /**
+     * @description Returns configuration of gasless transfers
+     *
+     * @tags Gasless
+     * @name GaslessConfig
+     * @request GET:/v2/gasless/config
+     */
+    async gaslessConfig(params: RequestParams = {}) {
+        const req = this.http.request<GaslessConfigData, Error>({
+            path: `/v2/gasless/config`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GaslessConfigData>(req, {
+            $ref: '#/components/schemas/GaslessConfig'
+        });
+    }
+
+    /**
+     * @description Estimates the cost of the given messages and returns a payload to sign
+     *
+     * @tags Gasless
+     * @name GaslessEstimate
+     * @request POST:/v2/gasless/estimate/{master_id}
+     */
+    async gaslessEstimate(
+        masterId_Address: Address,
+        data: {
+            /**
+             * TONAPI verifies that the account has enough jettons to pay the commission and make a transfer.
+             * @default false
+             */
+            throwErrorIfNotEnoughJettons?: boolean;
+            /** @default false */
+            returnEmulation?: boolean;
+            /** @format address */
+            walletAddress: Address;
+            walletPublicKey: string;
+            messages: {
+                /** @format cell */
+                boc: Cell;
+            }[];
+        },
+        params: RequestParams = {}
+    ) {
+        const masterId = masterId_Address.toRawString();
+        const req = this.http.request<GaslessEstimateData, Error>({
+            path: `/v2/gasless/estimate/${masterId}`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['messages', 'walletAddress', 'walletPublicKey'],
+                properties: {
+                    throwErrorIfNotEnoughJettons: { type: 'boolean', default: false },
+                    returnEmulation: { type: 'boolean', default: false },
+                    walletAddress: { type: 'string', format: 'address' },
+                    walletPublicKey: { type: 'string' },
+                    messages: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['boc'],
+                            properties: { boc: { type: 'string', format: 'cell' } }
+                        }
+                    }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GaslessEstimateData>(req, {
+            $ref: '#/components/schemas/SignRawParams'
+        });
+    }
+
+    /**
+     * @description Submits the signed gasless transaction message to the network
+     *
+     * @tags Gasless
+     * @name GaslessSend
+     * @request POST:/v2/gasless/send
+     */
+    async gaslessSend(
+        data: {
+            /** hex encoded public key */
+            walletPublicKey: string;
+            /** @format cell */
+            boc: Cell;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GaslessSendData, Error>({
+            path: `/v2/gasless/send`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['boc', 'walletPublicKey'],
+                properties: {
+                    walletPublicKey: { type: 'string' },
+                    boc: { type: 'string', format: 'cell' }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GaslessSendData>(req, { $ref: '#/components/schemas/GaslessTx' });
+    }
+
+    /**
+     * @description Get raw masterchain info
+     *
+     * @tags Lite Server
+     * @name GetRawMasterchainInfo
+     * @request GET:/v2/liteserver/get_masterchain_info
+     */
+    async getRawMasterchainInfo(params: RequestParams = {}) {
+        const req = this.http.request<GetRawMasterchainInfoData, Error>({
+            path: `/v2/liteserver/get_masterchain_info`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawMasterchainInfoData>(req, {
+            type: 'object',
+            required: ['last', 'state_root_hash', 'init'],
+            properties: {
+                last: { $ref: '#/components/schemas/BlockRaw' },
+                state_root_hash: { type: 'string' },
+                init: { $ref: '#/components/schemas/InitStateRaw' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw masterchain info ext
+     *
+     * @tags Lite Server
+     * @name GetRawMasterchainInfoExt
+     * @request GET:/v2/liteserver/get_masterchain_info_ext
+     */
+    async getRawMasterchainInfoExt(
+        query: {
+            /**
+             * mode
+             * @format int32
+             * @example 0
+             */
+            mode: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetRawMasterchainInfoExtData, Error>({
+            path: `/v2/liteserver/get_masterchain_info_ext`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawMasterchainInfoExtData>(req, {
+            type: 'object',
+            required: [
+                'mode',
+                'version',
+                'capabilities',
+                'last',
+                'last_utime',
+                'now',
+                'state_root_hash',
+                'init'
+            ],
+            properties: {
+                mode: { type: 'integer', format: 'int32' },
+                version: { type: 'integer', format: 'int32' },
+                capabilities: { type: 'integer', format: 'int64' },
+                last: { $ref: '#/components/schemas/BlockRaw' },
+                last_utime: { type: 'integer', format: 'int32' },
+                now: { type: 'integer', format: 'int32' },
+                state_root_hash: { type: 'string' },
+                init: { $ref: '#/components/schemas/InitStateRaw' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw time
+     *
+     * @tags Lite Server
+     * @name GetRawTime
+     * @request GET:/v2/liteserver/get_time
+     */
+    async getRawTime(params: RequestParams = {}) {
+        const req = this.http.request<GetRawTimeData, Error>({
+            path: `/v2/liteserver/get_time`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawTimeData>(req, {
+            type: 'object',
+            required: ['time'],
+            properties: { time: { type: 'integer', format: 'int32' } }
+        });
+    }
+
+    /**
+     * @description Get raw blockchain block
+     *
+     * @tags Lite Server
+     * @name GetRawBlockchainBlock
+     * @request GET:/v2/liteserver/get_block/{block_id}
+     */
+    async getRawBlockchainBlock(blockId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetRawBlockchainBlockData, Error>({
+            path: `/v2/liteserver/get_block/${blockId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawBlockchainBlockData>(req, {
+            type: 'object',
+            required: ['id', 'data'],
+            properties: { id: { $ref: '#/components/schemas/BlockRaw' }, data: { type: 'string' } }
+        });
+    }
+
+    /**
+     * @description Get raw blockchain block state
+     *
+     * @tags Lite Server
+     * @name GetRawBlockchainBlockState
+     * @request GET:/v2/liteserver/get_state/{block_id}
+     */
+    async getRawBlockchainBlockState(blockId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetRawBlockchainBlockStateData, Error>({
+            path: `/v2/liteserver/get_state/${blockId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawBlockchainBlockStateData>(req, {
+            type: 'object',
+            required: ['id', 'root_hash', 'file_hash', 'data'],
+            properties: {
+                id: { $ref: '#/components/schemas/BlockRaw' },
+                root_hash: { type: 'string' },
+                file_hash: { type: 'string' },
+                data: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw blockchain block header
+     *
+     * @tags Lite Server
+     * @name GetRawBlockchainBlockHeader
+     * @request GET:/v2/liteserver/get_block_header/{block_id}
+     */
+    async getRawBlockchainBlockHeader(
+        blockId: string,
+        query: {
+            /**
+             * mode
+             * @format int32
+             * @example 0
+             */
+            mode: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetRawBlockchainBlockHeaderData, Error>({
+            path: `/v2/liteserver/get_block_header/${blockId}`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawBlockchainBlockHeaderData>(req, {
+            type: 'object',
+            required: ['id', 'mode', 'header_proof'],
+            properties: {
+                id: { $ref: '#/components/schemas/BlockRaw' },
+                mode: { type: 'integer', format: 'int32' },
+                header_proof: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Send raw message to blockchain
+     *
+     * @tags Lite Server
+     * @name SendRawMessage
+     * @request POST:/v2/liteserver/send_message
+     */
+    async sendRawMessage(
+        data: {
+            /** @format cell-base64 */
+            body: Cell;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<SendRawMessageData, Error>({
+            path: `/v2/liteserver/send_message`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['body'],
+                properties: { body: { type: 'string', format: 'cell-base64' } }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<SendRawMessageData>(req, {
+            type: 'object',
+            required: ['code'],
+            properties: { code: { type: 'integer', format: 'int32' } }
+        });
+    }
+
+    /**
+     * @description Get raw account state
+     *
+     * @tags Lite Server
+     * @name GetRawAccountState
+     * @request GET:/v2/liteserver/get_account_state/{account_id}
+     */
+    async getRawAccountState(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * target block: (workchain,shard,seqno,root_hash,file_hash)
+             * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
+             */
+            target_block?: string;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetRawAccountStateData, Error>({
+            path: `/v2/liteserver/get_account_state/${accountId}`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawAccountStateData>(req, {
+            type: 'object',
+            required: ['id', 'shardblk', 'shard_proof', 'proof', 'state'],
+            properties: {
+                id: { $ref: '#/components/schemas/BlockRaw' },
+                shardblk: { $ref: '#/components/schemas/BlockRaw' },
+                shard_proof: { type: 'string' },
+                proof: { type: 'string' },
+                state: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw shard info
+     *
+     * @tags Lite Server
+     * @name GetRawShardInfo
+     * @request GET:/v2/liteserver/get_shard_info/{block_id}
+     */
+    async getRawShardInfo(
+        blockId: string,
+        query: {
+            /**
+             * workchain
+             * @format int32
+             * @example 1
+             */
+            workchain: number;
+            /**
+             * shard
+             * @format int64
+             * @example 1
+             */
+            shard: number;
+            /**
+             * exact
+             * @example false
+             */
+            exact: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetRawShardInfoData, Error>({
+            path: `/v2/liteserver/get_shard_info/${blockId}`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawShardInfoData>(req, {
+            type: 'object',
+            required: ['id', 'shardblk', 'shard_proof', 'shard_descr'],
+            properties: {
+                id: { $ref: '#/components/schemas/BlockRaw' },
+                shardblk: { $ref: '#/components/schemas/BlockRaw' },
+                shard_proof: { type: 'string' },
+                shard_descr: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Get all raw shards info
+     *
+     * @tags Lite Server
+     * @name GetAllRawShardsInfo
+     * @request GET:/v2/liteserver/get_all_shards_info/{block_id}
+     */
+    async getAllRawShardsInfo(blockId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetAllRawShardsInfoData, Error>({
+            path: `/v2/liteserver/get_all_shards_info/${blockId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetAllRawShardsInfoData>(req, {
+            type: 'object',
+            required: ['id', 'proof', 'data'],
+            properties: {
+                id: { $ref: '#/components/schemas/BlockRaw' },
+                proof: { type: 'string' },
+                data: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw transactions
+     *
+     * @tags Lite Server
+     * @name GetRawTransactions
+     * @request GET:/v2/liteserver/get_transactions/{account_id}
+     */
+    async getRawTransactions(
+        accountId_Address: Address,
+        query: {
+            /**
+             * count
+             * @format int32
+             * @example 100
+             */
+            count: number;
+            /**
+             * lt
+             * @format int64
+             * @example 23814011000000
+             */
+            lt: number;
+            /**
+             * hash
+             * @example "131D0C65055F04E9C19D687B51BC70F952FD9CA6F02C2801D3B89964A779DF85"
+             */
+            hash: string;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetRawTransactionsData, Error>({
+            path: `/v2/liteserver/get_transactions/${accountId}`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawTransactionsData>(req, {
+            type: 'object',
+            required: ['ids', 'transactions'],
+            properties: {
+                ids: { type: 'array', items: { $ref: '#/components/schemas/BlockRaw' } },
+                transactions: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw list block transactions
+     *
+     * @tags Lite Server
+     * @name GetRawListBlockTransactions
+     * @request GET:/v2/liteserver/list_block_transactions/{block_id}
+     */
+    async getRawListBlockTransactions(
+        blockId: string,
+        query: {
+            /**
+             * mode
+             * @format int32
+             * @example 0
+             */
+            mode: number;
+            /**
+             * count
+             * @format int32
+             * @example 100
+             */
+            count: number;
+            /**
+             * account ID
+             * @format address
+             * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
+             */
+            account_id?: Address;
+            /**
+             * lt
+             * @format int64
+             * @example 23814011000000
+             */
+            lt?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetRawListBlockTransactionsData, Error>({
+            path: `/v2/liteserver/list_block_transactions/${blockId}`,
+            method: 'GET',
+            query: query && {
+                ...query,
+                account_id: query.account_id?.toRawString()
+            },
+            queryImplode: ['account_id'],
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawListBlockTransactionsData>(req, {
+            type: 'object',
+            required: ['id', 'req_count', 'incomplete', 'ids', 'proof'],
+            properties: {
+                id: { $ref: '#/components/schemas/BlockRaw' },
+                req_count: { type: 'integer', format: 'int32' },
+                incomplete: { type: 'boolean' },
+                ids: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['mode'],
+                        properties: {
+                            mode: { type: 'integer', format: 'int32' },
+                            account: { type: 'string' },
+                            lt: { type: 'integer', format: 'bigint', 'x-js-format': 'bigint' },
+                            hash: { type: 'string' }
+                        }
+                    }
+                },
+                proof: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw block proof
+     *
+     * @tags Lite Server
+     * @name GetRawBlockProof
+     * @request GET:/v2/liteserver/get_block_proof
+     */
+    async getRawBlockProof(
+        query: {
+            /**
+             * known block: (workchain,shard,seqno,root_hash,file_hash)
+             * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
+             */
+            known_block: string;
+            /**
+             * target block: (workchain,shard,seqno,root_hash,file_hash)
+             * @example "(-1,8000000000000000,4234234,3E575DAB1D25...90D8,47192E5C46C...BB29)"
+             */
+            target_block?: string;
+            /**
+             * mode
+             * @format int32
+             * @example 0
+             */
+            mode: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetRawBlockProofData, Error>({
+            path: `/v2/liteserver/get_block_proof`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawBlockProofData>(req, {
+            type: 'object',
+            required: ['complete', 'from', 'to', 'steps'],
+            properties: {
+                complete: { type: 'boolean' },
+                from: { $ref: '#/components/schemas/BlockRaw' },
+                to: { $ref: '#/components/schemas/BlockRaw' },
+                steps: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['lite_server_block_link_back', 'lite_server_block_link_forward'],
+                        properties: {
+                            lite_server_block_link_back: {
+                                type: 'object',
+                                required: [
+                                    'to_key_block',
+                                    'from',
+                                    'to',
+                                    'dest_proof',
+                                    'proof',
+                                    'state_proof'
+                                ],
+                                properties: {
+                                    to_key_block: { type: 'boolean' },
+                                    from: { $ref: '#/components/schemas/BlockRaw' },
+                                    to: { $ref: '#/components/schemas/BlockRaw' },
+                                    dest_proof: { type: 'string' },
+                                    proof: { type: 'string' },
+                                    state_proof: { type: 'string' }
+                                }
+                            },
+                            lite_server_block_link_forward: {
+                                type: 'object',
+                                required: [
+                                    'to_key_block',
+                                    'from',
+                                    'to',
+                                    'dest_proof',
+                                    'config_proof',
+                                    'signatures'
+                                ],
+                                properties: {
+                                    to_key_block: { type: 'boolean' },
+                                    from: { $ref: '#/components/schemas/BlockRaw' },
+                                    to: { $ref: '#/components/schemas/BlockRaw' },
+                                    dest_proof: { type: 'string' },
+                                    config_proof: { type: 'string' },
+                                    signatures: {
+                                        type: 'object',
+                                        required: [
+                                            'validator_set_hash',
+                                            'catchain_seqno',
+                                            'signatures'
+                                        ],
+                                        properties: {
+                                            validator_set_hash: {
+                                                type: 'integer',
+                                                format: 'int64'
+                                            },
+                                            catchain_seqno: { type: 'integer', format: 'int32' },
+                                            signatures: {
+                                                type: 'array',
+                                                items: {
+                                                    type: 'object',
+                                                    required: ['node_id_short', 'signature'],
+                                                    properties: {
+                                                        node_id_short: { type: 'string' },
+                                                        signature: { type: 'string' }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw config
+     *
+     * @tags Lite Server
+     * @name GetRawConfig
+     * @request GET:/v2/liteserver/get_config_all/{block_id}
+     */
+    async getRawConfig(
+        blockId: string,
+        query: {
+            /**
+             * mode
+             * @format int32
+             * @example 0
+             */
+            mode: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<GetRawConfigData, Error>({
+            path: `/v2/liteserver/get_config_all/${blockId}`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawConfigData>(req, {
+            type: 'object',
+            required: ['mode', 'id', 'state_proof', 'config_proof'],
+            properties: {
+                mode: { type: 'integer', format: 'int32' },
+                id: { $ref: '#/components/schemas/BlockRaw' },
+                state_proof: { type: 'string' },
+                config_proof: { type: 'string' }
+            }
+        });
+    }
+
+    /**
+     * @description Get raw shard block proof
+     *
+     * @tags Lite Server
+     * @name GetRawShardBlockProof
+     * @request GET:/v2/liteserver/get_shard_block_proof/{block_id}
+     */
+    async getRawShardBlockProof(blockId: string, params: RequestParams = {}) {
+        const req = this.http.request<GetRawShardBlockProofData, Error>({
+            path: `/v2/liteserver/get_shard_block_proof/${blockId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetRawShardBlockProofData>(req, {
+            type: 'object',
+            required: ['masterchain_id', 'links'],
+            properties: {
+                masterchain_id: { $ref: '#/components/schemas/BlockRaw' },
+                links: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['id', 'proof'],
+                        properties: {
+                            id: { $ref: '#/components/schemas/BlockRaw' },
+                            proof: { type: 'string' }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * @description Get out msg queue sizes
+     *
+     * @tags Lite Server
+     * @name GetOutMsgQueueSizes
+     * @request GET:/v2/liteserver/get_out_msg_queue_sizes
+     */
+    async getOutMsgQueueSizes(params: RequestParams = {}) {
+        const req = this.http.request<GetOutMsgQueueSizesData, Error>({
+            path: `/v2/liteserver/get_out_msg_queue_sizes`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetOutMsgQueueSizesData>(req, {
+            type: 'object',
+            required: ['ext_msg_queue_size_limit', 'shards'],
+            properties: {
+                ext_msg_queue_size_limit: { type: 'integer', format: 'uint32' },
+                shards: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        required: ['id', 'size'],
+                        properties: {
+                            id: { $ref: '#/components/schemas/BlockRaw' },
+                            size: { type: 'integer', format: 'uint32' }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * @description Get multisig account info
+     *
+     * @tags Multisig
+     * @name GetMultisigAccount
+     * @request GET:/v2/multisig/{account_id}
+     */
+    async getMultisigAccount(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetMultisigAccountData, Error>({
+            path: `/v2/multisig/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetMultisigAccountData>(req, {
+            $ref: '#/components/schemas/Multisig'
+        });
+    }
+
+    /**
+     * @description Get multisig order
+     *
+     * @tags Multisig
+     * @name GetMultisigOrder
+     * @request GET:/v2/multisig/order/{account_id}
+     */
+    async getMultisigOrder(accountId_Address: Address, params: RequestParams = {}) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetMultisigOrderData, Error>({
+            path: `/v2/multisig/order/${accountId}`,
+            method: 'GET',
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetMultisigOrderData>(req, {
+            $ref: '#/components/schemas/MultisigOrder'
+        });
+    }
+
+    /**
+     * @description Decode a given message. Only external incoming messages can be decoded currently.
+     *
+     * @tags Emulation
+     * @name DecodeMessage
+     * @request POST:/v2/message/decode
+     */
+    async decodeMessage(
+        data: {
+            /** @format cell */
+            boc: Cell;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<DecodeMessageData, Error>({
+            path: `/v2/message/decode`,
+            method: 'POST',
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['boc'],
+                properties: { boc: { type: 'string', format: 'cell' } }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<DecodeMessageData>(req, {
+            $ref: '#/components/schemas/DecodedMessage'
+        });
+    }
+
+    /**
+     * @description Emulate sending message to retrieve general blockchain events
+     *
+     * @tags Emulation, Events
+     * @name EmulateMessageToEvent
+     * @request POST:/v2/events/emulate
+     */
+    async emulateMessageToEvent(
+        data: {
+            /** @format cell */
+            boc: Cell;
+        },
+        query?: {
+            ignore_signature_check?: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<EmulateMessageToEventData, Error>({
+            path: `/v2/events/emulate`,
+            method: 'POST',
+            query: query,
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['boc'],
+                properties: { boc: { type: 'string', format: 'cell' } }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<EmulateMessageToEventData>(req, {
+            $ref: '#/components/schemas/Event'
+        });
+    }
+
+    /**
+     * @description Emulate sending message to retrieve with a detailed execution trace
+     *
+     * @tags Emulation, Traces
+     * @name EmulateMessageToTrace
+     * @request POST:/v2/traces/emulate
+     */
+    async emulateMessageToTrace(
+        data: {
+            /** @format cell */
+            boc: Cell;
+        },
+        query?: {
+            ignore_signature_check?: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<EmulateMessageToTraceData, Error>({
+            path: `/v2/traces/emulate`,
+            method: 'POST',
+            query: query,
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['boc'],
+                properties: { boc: { type: 'string', format: 'cell' } }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<EmulateMessageToTraceData>(req, {
+            $ref: '#/components/schemas/Trace'
+        });
+    }
+
+    /**
+     * @description Emulate sending message to retrieve the resulting wallet state
+     *
+     * @tags Emulation, Wallet
+     * @name EmulateMessageToWallet
+     * @request POST:/v2/wallet/emulate
+     */
+    async emulateMessageToWallet(
+        data: {
+            /** @format cell */
+            boc: Cell;
+            /** additional per account configuration */
+            params?: {
+                /**
+                 * @format address
+                 * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
+                 */
+                address: Address;
+                /**
+                 * @format bigint
+                 * @example 10000000000
+                 */
+                balance?: bigint;
+            }[];
+        },
+        query?: {
+            /** @example "usd" */
+            currency?: string;
+        },
+        params: RequestParams = {}
+    ) {
+        const req = this.http.request<EmulateMessageToWalletData, Error>({
+            path: `/v2/wallet/emulate`,
+            method: 'POST',
+            query: query,
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['boc'],
+                properties: {
+                    boc: { type: 'string', format: 'cell' },
+                    params: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            required: ['address'],
+                            properties: {
+                                address: { type: 'string', format: 'address' },
+                                balance: {
+                                    type: 'integer',
+                                    format: 'bigint',
+                                    'x-js-format': 'bigint'
+                                }
+                            }
+                        }
+                    }
+                }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<EmulateMessageToWalletData>(req, {
+            $ref: '#/components/schemas/MessageConsequences'
+        });
+    }
+
+    /**
+     * @description Emulate sending message to retrieve account-specific events
+     *
+     * @tags Emulation, Accounts
+     * @name EmulateMessageToAccountEvent
+     * @request POST:/v2/accounts/{account_id}/events/emulate
+     */
+    async emulateMessageToAccountEvent(
+        accountId_Address: Address,
+        data: {
+            /** @format cell */
+            boc: Cell;
+        },
+        query?: {
+            ignore_signature_check?: boolean;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<EmulateMessageToAccountEventData, Error>({
+            path: `/v2/accounts/${accountId}/events/emulate`,
+            method: 'POST',
+            query: query,
+            body: prepareRequestData(data, {
+                type: 'object',
+                required: ['boc'],
+                properties: { boc: { type: 'string', format: 'cell' } }
+            }),
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<EmulateMessageToAccountEventData>(req, {
+            $ref: '#/components/schemas/AccountEvent'
+        });
+    }
+
+    /**
+     * @description Get history of purchases
+     *
+     * @tags Purchases
+     * @name GetPurchaseHistory
+     * @request GET:/v2/purchases/{account_id}/history
+     */
+    async getPurchaseHistory(
+        accountId_Address: Address,
+        query?: {
+            /**
+             * omit this parameter to get last invoices
+             * @format bigint
+             * @example 25758317000002
+             */
+            before_lt?: bigint;
+            /**
+             * @min 1
+             * @max 1000
+             * @default 100
+             * @example 100
+             */
+            limit?: number;
+        },
+        params: RequestParams = {}
+    ) {
+        const accountId = accountId_Address.toRawString();
+        const req = this.http.request<GetPurchaseHistoryData, Error>({
+            path: `/v2/purchases/${accountId}/history`,
+            method: 'GET',
+            query: query,
+            format: 'json',
+            ...params
+        });
+
+        return prepareResponse<GetPurchaseHistoryData>(req, {
+            $ref: '#/components/schemas/AccountPurchases'
+        });
+    }
+}
+
+// Default client instance for global methods
+let defaultClient: TonApiClient | null = null;
 
 /**
- * Initialize the API client with configuration.
- * Should be called once at application startup.
+ * Initialize the global API client with configuration.
+ * For advanced use cases with global methods.
  *
  * @param apiConfig - Configuration for the API client
  * @param apiConfig.baseUrl - API base URL
@@ -6842,21 +10337,31 @@ let httpClient: HttpClient | null = null;
  *   baseUrl: 'https://tonapi.io',
  *   apiKey: process.env.TON_API_KEY
  * });
+ *
+ * const { data, error } = await getAccount(address);
+ * if (error) {
+ *   console.error('Error:', error.message);
+ * } else {
+ *   console.log(data);
+ * }
  * ```
  */
 export function initClient(apiConfig: ApiConfig = {}): void {
-    httpClient = new HttpClient(apiConfig);
+    defaultClient = new TonApiClient(apiConfig);
 }
 
 /**
- * Get the current HttpClient instance (creates one if it doesn't exist)
+ * Get the current default client instance
  * @internal
  */
-function getHttpClient(): HttpClient {
-    if (!httpClient) {
-        httpClient = new HttpClient();
+function getDefaultClient(): TonApiClient {
+    if (!defaultClient) {
+        throw new Error(
+            'TonApiClient is not initialized. Call initClient() before using global methods, ' +
+                'or use new TonApiClient() for instance-based approach.'
+        );
     }
-    return httpClient;
+    return defaultClient;
 }
 
 /**
@@ -6866,15 +10371,13 @@ function getHttpClient(): HttpClient {
  * @name GetOpenapiJson
  * @request GET:/v2/openapi.json
  */
-export const getOpenapiJson = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetOpenapiJsonData, Error>({
-        path: `/v2/openapi.json`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetOpenapiJsonData>(req, {});
+export const getOpenapiJson = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getOpenapiJson(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -6884,14 +10387,13 @@ export const getOpenapiJson = (params: RequestParams = {}) => {
  * @name GetOpenapiYml
  * @request GET:/v2/openapi.yml
  */
-export const getOpenapiYml = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetOpenapiYmlData, Error>({
-        path: `/v2/openapi.yml`,
-        method: 'GET',
-        ...params
-    });
-
-    return prepareResponse<GetOpenapiYmlData>(req);
+export const getOpenapiYml = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getOpenapiYml(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -6901,15 +10403,13 @@ export const getOpenapiYml = (params: RequestParams = {}) => {
  * @name Status
  * @request GET:/v2/status
  */
-export const status = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<StatusData, Error>({
-        path: `/v2/status`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<StatusData>(req, { $ref: '#/components/schemas/ServiceStatus' });
+export const status = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().status(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -6919,34 +10419,13 @@ export const status = (params: RequestParams = {}) => {
  * @name AddressParse
  * @request GET:/v2/address/{account_id}/parse
  */
-export const addressParse = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<AddressParseData, Error>({
-        path: `/v2/address/${accountId}/parse`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<AddressParseData>(req, {
-        type: 'object',
-        required: ['raw_form', 'bounceable', 'non_bounceable', 'given_type', 'test_only'],
-        properties: {
-            raw_form: { type: 'string', format: 'address' },
-            bounceable: {
-                required: ['b64', 'b64url'],
-                type: 'object',
-                properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
-            },
-            non_bounceable: {
-                required: ['b64', 'b64url'],
-                type: 'object',
-                properties: { b64: { type: 'string' }, b64url: { type: 'string' } }
-            },
-            given_type: { type: 'string' },
-            test_only: { type: 'boolean' }
-        }
-    });
+export const addressParse = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().addressParse(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -6956,7 +10435,7 @@ export const addressParse = (accountId_Address: Address, params: RequestParams =
  * @name GetReducedBlockchainBlocks
  * @request GET:/v2/blockchain/reduced/blocks
  */
-export const getReducedBlockchainBlocks = (
+export const getReducedBlockchainBlocks = async (
     query: {
         /** @format int64 */
         from: number;
@@ -6965,17 +10444,12 @@ export const getReducedBlockchainBlocks = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetReducedBlockchainBlocksData, Error>({
-        path: `/v2/blockchain/reduced/blocks`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetReducedBlockchainBlocksData>(req, {
-        $ref: '#/components/schemas/ReducedBlocks'
-    });
+    try {
+        const result = await getDefaultClient().getReducedBlockchainBlocks(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -6985,17 +10459,13 @@ export const getReducedBlockchainBlocks = (
  * @name GetBlockchainBlock
  * @request GET:/v2/blockchain/blocks/{block_id}
  */
-export const getBlockchainBlock = (blockId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetBlockchainBlockData, Error>({
-        path: `/v2/blockchain/blocks/${blockId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainBlockData>(req, {
-        $ref: '#/components/schemas/BlockchainBlock'
-    });
+export const getBlockchainBlock = async (blockId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getBlockchainBlock(blockId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7005,14 +10475,13 @@ export const getBlockchainBlock = (blockId: string, params: RequestParams = {}) 
  * @name DownloadBlockchainBlockBoc
  * @request GET:/v2/blockchain/blocks/{block_id}/boc
  */
-export const downloadBlockchainBlockBoc = (blockId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<DownloadBlockchainBlockBocData, Error>({
-        path: `/v2/blockchain/blocks/${blockId}/boc`,
-        method: 'GET',
-        ...params
-    });
-
-    return prepareResponse<DownloadBlockchainBlockBocData>(req);
+export const downloadBlockchainBlockBoc = async (blockId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().downloadBlockchainBlockBoc(blockId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7022,20 +10491,19 @@ export const downloadBlockchainBlockBoc = (blockId: string, params: RequestParam
  * @name GetBlockchainMasterchainShards
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/shards
  */
-export const getBlockchainMasterchainShards = (
+export const getBlockchainMasterchainShards = async (
     masterchainSeqno: number,
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetBlockchainMasterchainShardsData, Error>({
-        path: `/v2/blockchain/masterchain/${masterchainSeqno}/shards`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainMasterchainShardsData>(req, {
-        $ref: '#/components/schemas/BlockchainBlockShards'
-    });
+    try {
+        const result = await getDefaultClient().getBlockchainMasterchainShards(
+            masterchainSeqno,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7045,20 +10513,19 @@ export const getBlockchainMasterchainShards = (
  * @name GetBlockchainMasterchainBlocks
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/blocks
  */
-export const getBlockchainMasterchainBlocks = (
+export const getBlockchainMasterchainBlocks = async (
     masterchainSeqno: number,
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetBlockchainMasterchainBlocksData, Error>({
-        path: `/v2/blockchain/masterchain/${masterchainSeqno}/blocks`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainMasterchainBlocksData>(req, {
-        $ref: '#/components/schemas/BlockchainBlocks'
-    });
+    try {
+        const result = await getDefaultClient().getBlockchainMasterchainBlocks(
+            masterchainSeqno,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7068,20 +10535,19 @@ export const getBlockchainMasterchainBlocks = (
  * @name GetBlockchainMasterchainTransactions
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/transactions
  */
-export const getBlockchainMasterchainTransactions = (
+export const getBlockchainMasterchainTransactions = async (
     masterchainSeqno: number,
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetBlockchainMasterchainTransactionsData, Error>({
-        path: `/v2/blockchain/masterchain/${masterchainSeqno}/transactions`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainMasterchainTransactionsData>(req, {
-        $ref: '#/components/schemas/Transactions'
-    });
+    try {
+        const result = await getDefaultClient().getBlockchainMasterchainTransactions(
+            masterchainSeqno,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7091,20 +10557,19 @@ export const getBlockchainMasterchainTransactions = (
  * @name GetBlockchainConfigFromBlock
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config
  */
-export const getBlockchainConfigFromBlock = (
+export const getBlockchainConfigFromBlock = async (
     masterchainSeqno: number,
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetBlockchainConfigFromBlockData, Error>({
-        path: `/v2/blockchain/masterchain/${masterchainSeqno}/config`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainConfigFromBlockData>(req, {
-        $ref: '#/components/schemas/BlockchainConfig'
-    });
+    try {
+        const result = await getDefaultClient().getBlockchainConfigFromBlock(
+            masterchainSeqno,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7114,20 +10579,19 @@ export const getBlockchainConfigFromBlock = (
  * @name GetRawBlockchainConfigFromBlock
  * @request GET:/v2/blockchain/masterchain/{masterchain_seqno}/config/raw
  */
-export const getRawBlockchainConfigFromBlock = (
+export const getRawBlockchainConfigFromBlock = async (
     masterchainSeqno: number,
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRawBlockchainConfigFromBlockData, Error>({
-        path: `/v2/blockchain/masterchain/${masterchainSeqno}/config/raw`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawBlockchainConfigFromBlockData>(req, {
-        $ref: '#/components/schemas/RawBlockchainConfig'
-    });
+    try {
+        const result = await getDefaultClient().getRawBlockchainConfigFromBlock(
+            masterchainSeqno,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7137,17 +10601,16 @@ export const getRawBlockchainConfigFromBlock = (
  * @name GetBlockchainBlockTransactions
  * @request GET:/v2/blockchain/blocks/{block_id}/transactions
  */
-export const getBlockchainBlockTransactions = (blockId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetBlockchainBlockTransactionsData, Error>({
-        path: `/v2/blockchain/blocks/${blockId}/transactions`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainBlockTransactionsData>(req, {
-        $ref: '#/components/schemas/Transactions'
-    });
+export const getBlockchainBlockTransactions = async (
+    blockId: string,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getBlockchainBlockTransactions(blockId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7157,17 +10620,16 @@ export const getBlockchainBlockTransactions = (blockId: string, params: RequestP
  * @name GetBlockchainTransaction
  * @request GET:/v2/blockchain/transactions/{transaction_id}
  */
-export const getBlockchainTransaction = (transactionId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetBlockchainTransactionData, Error>({
-        path: `/v2/blockchain/transactions/${transactionId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainTransactionData>(req, {
-        $ref: '#/components/schemas/Transaction'
-    });
+export const getBlockchainTransaction = async (
+    transactionId: string,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getBlockchainTransaction(transactionId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7177,20 +10639,19 @@ export const getBlockchainTransaction = (transactionId: string, params: RequestP
  * @name GetBlockchainTransactionByMessageHash
  * @request GET:/v2/blockchain/messages/{msg_id}/transaction
  */
-export const getBlockchainTransactionByMessageHash = (
+export const getBlockchainTransactionByMessageHash = async (
     msgId: string,
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetBlockchainTransactionByMessageHashData, Error>({
-        path: `/v2/blockchain/messages/${msgId}/transaction`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainTransactionByMessageHashData>(req, {
-        $ref: '#/components/schemas/Transaction'
-    });
+    try {
+        const result = await getDefaultClient().getBlockchainTransactionByMessageHash(
+            msgId,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7200,17 +10661,13 @@ export const getBlockchainTransactionByMessageHash = (
  * @name GetBlockchainValidators
  * @request GET:/v2/blockchain/validators
  */
-export const getBlockchainValidators = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetBlockchainValidatorsData, Error>({
-        path: `/v2/blockchain/validators`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainValidatorsData>(req, {
-        $ref: '#/components/schemas/Validators'
-    });
+export const getBlockchainValidators = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getBlockchainValidators(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7220,17 +10677,13 @@ export const getBlockchainValidators = (params: RequestParams = {}) => {
  * @name GetBlockchainMasterchainHead
  * @request GET:/v2/blockchain/masterchain-head
  */
-export const getBlockchainMasterchainHead = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetBlockchainMasterchainHeadData, Error>({
-        path: `/v2/blockchain/masterchain-head`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainMasterchainHeadData>(req, {
-        $ref: '#/components/schemas/BlockchainBlock'
-    });
+export const getBlockchainMasterchainHead = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getBlockchainMasterchainHead(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7240,18 +10693,16 @@ export const getBlockchainMasterchainHead = (params: RequestParams = {}) => {
  * @name GetBlockchainRawAccount
  * @request GET:/v2/blockchain/accounts/{account_id}
  */
-export const getBlockchainRawAccount = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetBlockchainRawAccountData, Error>({
-        path: `/v2/blockchain/accounts/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainRawAccountData>(req, {
-        $ref: '#/components/schemas/BlockchainRawAccount'
-    });
+export const getBlockchainRawAccount = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getBlockchainRawAccount(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7261,7 +10712,7 @@ export const getBlockchainRawAccount = (accountId_Address: Address, params: Requ
  * @name GetBlockchainAccountTransactions
  * @request GET:/v2/blockchain/accounts/{account_id}/transactions
  */
-export const getBlockchainAccountTransactions = (
+export const getBlockchainAccountTransactions = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -7292,18 +10743,16 @@ export const getBlockchainAccountTransactions = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetBlockchainAccountTransactionsData, Error>({
-        path: `/v2/blockchain/accounts/${accountId}/transactions`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainAccountTransactionsData>(req, {
-        $ref: '#/components/schemas/Transactions'
-    });
+    try {
+        const result = await getDefaultClient().getBlockchainAccountTransactions(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7313,7 +10762,7 @@ export const getBlockchainAccountTransactions = (
  * @name ExecGetMethodForBlockchainAccount
  * @request GET:/v2/blockchain/accounts/{account_id}/methods/{method_name}
  */
-export const execGetMethodForBlockchainAccount = (
+export const execGetMethodForBlockchainAccount = async (
     accountId_Address: Address,
     methodName: string,
     query?: {
@@ -7332,18 +10781,17 @@ export const execGetMethodForBlockchainAccount = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<ExecGetMethodForBlockchainAccountData, Error>({
-        path: `/v2/blockchain/accounts/${accountId}/methods/${methodName}`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<ExecGetMethodForBlockchainAccountData>(req, {
-        $ref: '#/components/schemas/MethodExecutionResult'
-    });
+    try {
+        const result = await getDefaultClient().execGetMethodForBlockchainAccount(
+            accountId_Address,
+            methodName,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7353,7 +10801,7 @@ export const execGetMethodForBlockchainAccount = (
  * @name ExecGetMethodWithBodyForBlockchainAccount
  * @request POST:/v2/blockchain/accounts/{account_id}/methods/{method_name}
  */
-export const execGetMethodWithBodyForBlockchainAccount = (
+export const execGetMethodWithBodyForBlockchainAccount = async (
     accountId_Address: Address,
     methodName: string,
     data: {
@@ -7361,24 +10809,17 @@ export const execGetMethodWithBodyForBlockchainAccount = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<ExecGetMethodWithBodyForBlockchainAccountData, Error>({
-        path: `/v2/blockchain/accounts/${accountId}/methods/${methodName}`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['args'],
-            properties: {
-                args: { type: 'array', items: { $ref: '#/components/schemas/ExecGetMethodArg' } }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<ExecGetMethodWithBodyForBlockchainAccountData>(req, {
-        $ref: '#/components/schemas/MethodExecutionResult'
-    });
+    try {
+        const result = await getDefaultClient().execGetMethodWithBodyForBlockchainAccount(
+            accountId_Address,
+            methodName,
+            data,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7388,7 +10829,7 @@ export const execGetMethodWithBodyForBlockchainAccount = (
  * @name SendBlockchainMessage
  * @request POST:/v2/blockchain/message
  */
-export const sendBlockchainMessage = (
+export const sendBlockchainMessage = async (
     data: {
         /** @format cell */
         boc?: Cell;
@@ -7398,21 +10839,12 @@ export const sendBlockchainMessage = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<SendBlockchainMessageData, Error>({
-        path: `/v2/blockchain/message`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            properties: {
-                boc: { type: 'string', format: 'cell' },
-                batch: { type: 'array', maxItems: 5, items: { type: 'string', format: 'cell' } },
-                meta: { type: 'object', additionalProperties: { type: 'string' } }
-            }
-        }),
-        ...params
-    });
-
-    return prepareResponse<SendBlockchainMessageData>(req);
+    try {
+        const result = await getDefaultClient().sendBlockchainMessage(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7422,17 +10854,13 @@ export const sendBlockchainMessage = (
  * @name GetBlockchainConfig
  * @request GET:/v2/blockchain/config
  */
-export const getBlockchainConfig = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetBlockchainConfigData, Error>({
-        path: `/v2/blockchain/config`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetBlockchainConfigData>(req, {
-        $ref: '#/components/schemas/BlockchainConfig'
-    });
+export const getBlockchainConfig = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getBlockchainConfig(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7442,17 +10870,13 @@ export const getBlockchainConfig = (params: RequestParams = {}) => {
  * @name GetRawBlockchainConfig
  * @request GET:/v2/blockchain/config/raw
  */
-export const getRawBlockchainConfig = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetRawBlockchainConfigData, Error>({
-        path: `/v2/blockchain/config/raw`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawBlockchainConfigData>(req, {
-        $ref: '#/components/schemas/RawBlockchainConfig'
-    });
+export const getRawBlockchainConfig = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getRawBlockchainConfig(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7462,21 +10886,16 @@ export const getRawBlockchainConfig = (params: RequestParams = {}) => {
  * @name BlockchainAccountInspect
  * @request GET:/v2/blockchain/accounts/{account_id}/inspect
  */
-export const blockchainAccountInspect = (
+export const blockchainAccountInspect = async (
     accountId_Address: Address,
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<BlockchainAccountInspectData, Error>({
-        path: `/v2/blockchain/accounts/${accountId}/inspect`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<BlockchainAccountInspectData>(req, {
-        $ref: '#/components/schemas/BlockchainAccountInspect'
-    });
+    try {
+        const result = await getDefaultClient().blockchainAccountInspect(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7486,17 +10905,13 @@ export const blockchainAccountInspect = (
  * @name GetLibraryByHash
  * @request GET:/v2/blockchain/libraries/{hash}
  */
-export const getLibraryByHash = (hash: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetLibraryByHashData, Error>({
-        path: `/v2/blockchain/libraries/${hash}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetLibraryByHashData>(req, {
-        $ref: '#/components/schemas/BlockchainLibrary'
-    });
+export const getLibraryByHash = async (hash: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getLibraryByHash(hash, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7506,7 +10921,7 @@ export const getLibraryByHash = (hash: string, params: RequestParams = {}) => {
  * @name GetAccounts
  * @request POST:/v2/accounts/_bulk
  */
-export const getAccounts = (
+export const getAccounts = async (
     data: {
         accountIds: Address[];
     },
@@ -7516,22 +10931,12 @@ export const getAccounts = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetAccountsData, Error>({
-        path: `/v2/accounts/_bulk`,
-        method: 'POST',
-        query: query,
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['accountIds'],
-            properties: {
-                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountsData>(req, { $ref: '#/components/schemas/Accounts' });
+    try {
+        const result = await getDefaultClient().getAccounts(data, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7541,16 +10946,13 @@ export const getAccounts = (
  * @name GetAccount
  * @request GET:/v2/accounts/{account_id}
  */
-export const getAccount = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountData, Error>({
-        path: `/v2/accounts/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountData>(req, { $ref: '#/components/schemas/Account' });
+export const getAccount = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getAccount(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7560,18 +10962,16 @@ export const getAccount = (accountId_Address: Address, params: RequestParams = {
  * @name AccountDnsBackResolve
  * @request GET:/v2/accounts/{account_id}/dns/backresolve
  */
-export const accountDnsBackResolve = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<AccountDnsBackResolveData, Error>({
-        path: `/v2/accounts/${accountId}/dns/backresolve`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<AccountDnsBackResolveData>(req, {
-        $ref: '#/components/schemas/DomainNames'
-    });
+export const accountDnsBackResolve = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().accountDnsBackResolve(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7581,7 +10981,7 @@ export const accountDnsBackResolve = (accountId_Address: Address, params: Reques
  * @name GetAccountJettonsBalances
  * @request GET:/v2/accounts/{account_id}/jettons
  */
-export const getAccountJettonsBalances = (
+export const getAccountJettonsBalances = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -7597,19 +10997,16 @@ export const getAccountJettonsBalances = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountJettonsBalancesData, Error>({
-        path: `/v2/accounts/${accountId}/jettons`,
-        method: 'GET',
-        query: query,
-        queryImplode: ['currencies', 'supported_extensions'],
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountJettonsBalancesData>(req, {
-        $ref: '#/components/schemas/JettonsBalances'
-    });
+    try {
+        const result = await getDefaultClient().getAccountJettonsBalances(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7619,7 +11016,7 @@ export const getAccountJettonsBalances = (
  * @name GetAccountJettonBalance
  * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}
  */
-export const getAccountJettonBalance = (
+export const getAccountJettonBalance = async (
     accountId_Address: Address,
     jettonId_Address: Address,
     query?: {
@@ -7636,20 +11033,17 @@ export const getAccountJettonBalance = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const jettonId = jettonId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountJettonBalanceData, Error>({
-        path: `/v2/accounts/${accountId}/jettons/${jettonId}`,
-        method: 'GET',
-        query: query,
-        queryImplode: ['currencies', 'supported_extensions'],
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountJettonBalanceData>(req, {
-        $ref: '#/components/schemas/JettonBalance'
-    });
+    try {
+        const result = await getDefaultClient().getAccountJettonBalance(
+            accountId_Address,
+            jettonId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7659,7 +11053,7 @@ export const getAccountJettonBalance = (
  * @name GetAccountJettonsHistory
  * @request GET:/v2/accounts/{account_id}/jettons/history
  */
-export const getAccountJettonsHistory = (
+export const getAccountJettonsHistory = async (
     accountId_Address: Address,
     query: {
         /**
@@ -7677,18 +11071,16 @@ export const getAccountJettonsHistory = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountJettonsHistoryData, Error>({
-        path: `/v2/accounts/${accountId}/jettons/history`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountJettonsHistoryData>(req, {
-        $ref: '#/components/schemas/JettonOperations'
-    });
+    try {
+        const result = await getDefaultClient().getAccountJettonsHistory(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7699,7 +11091,7 @@ export const getAccountJettonsHistory = (
  * @request GET:/v2/accounts/{account_id}/jettons/{jetton_id}/history
  * @deprecated
  */
-export const getAccountJettonHistoryById = (
+export const getAccountJettonHistoryById = async (
     accountId_Address: Address,
     jettonId_Address: Address,
     query: {
@@ -7730,19 +11122,17 @@ export const getAccountJettonHistoryById = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const jettonId = jettonId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountJettonHistoryByIdData, Error>({
-        path: `/v2/accounts/${accountId}/jettons/${jettonId}/history`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountJettonHistoryByIdData>(req, {
-        $ref: '#/components/schemas/AccountEvents'
-    });
+    try {
+        const result = await getDefaultClient().getAccountJettonHistoryById(
+            accountId_Address,
+            jettonId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7752,7 +11142,7 @@ export const getAccountJettonHistoryById = (
  * @name GetAccountNftItems
  * @request GET:/v2/accounts/{account_id}/nfts
  */
-export const getAccountNftItems = (
+export const getAccountNftItems = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -7780,19 +11170,16 @@ export const getAccountNftItems = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountNftItemsData, Error>({
-        path: `/v2/accounts/${accountId}/nfts`,
-        method: 'GET',
-        query: query && {
-            ...query,
-            collection: query.collection?.toRawString()
-        },
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountNftItemsData>(req, { $ref: '#/components/schemas/NftItems' });
+    try {
+        const result = await getDefaultClient().getAccountNftItems(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7802,7 +11189,7 @@ export const getAccountNftItems = (
  * @name GetAccountEvents
  * @request GET:/v2/accounts/{account_id}/events
  */
-export const getAccountEvents = (
+export const getAccountEvents = async (
     accountId_Address: Address,
     query: {
         /**
@@ -7842,19 +11229,12 @@ export const getAccountEvents = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountEventsData, Error>({
-        path: `/v2/accounts/${accountId}/events`,
-        method: 'GET',
-        query: query,
-        queryImplode: ['initiator'],
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountEventsData>(req, {
-        $ref: '#/components/schemas/AccountEvents'
-    });
+    try {
+        const result = await getDefaultClient().getAccountEvents(accountId_Address, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7864,7 +11244,7 @@ export const getAccountEvents = (
  * @name GetAccountEvent
  * @request GET:/v2/accounts/{account_id}/events/{event_id}
  */
-export const getAccountEvent = (
+export const getAccountEvent = async (
     accountId_Address: Address,
     eventId: string,
     query?: {
@@ -7876,16 +11256,17 @@ export const getAccountEvent = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountEventData, Error>({
-        path: `/v2/accounts/${accountId}/events/${eventId}`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountEventData>(req, { $ref: '#/components/schemas/AccountEvent' });
+    try {
+        const result = await getDefaultClient().getAccountEvent(
+            accountId_Address,
+            eventId,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7895,7 +11276,7 @@ export const getAccountEvent = (
  * @name GetAccountTraces
  * @request GET:/v2/accounts/{account_id}/traces
  */
-export const getAccountTraces = (
+export const getAccountTraces = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -7914,16 +11295,12 @@ export const getAccountTraces = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountTracesData, Error>({
-        path: `/v2/accounts/${accountId}/traces`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountTracesData>(req, { $ref: '#/components/schemas/TraceIDs' });
+    try {
+        const result = await getDefaultClient().getAccountTraces(accountId_Address, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7933,18 +11310,16 @@ export const getAccountTraces = (
  * @name GetAccountSubscriptions
  * @request GET:/v2/accounts/{account_id}/subscriptions
  */
-export const getAccountSubscriptions = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountSubscriptionsData, Error>({
-        path: `/v2/accounts/${accountId}/subscriptions`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountSubscriptionsData>(req, {
-        $ref: '#/components/schemas/Subscriptions'
-    });
+export const getAccountSubscriptions = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getAccountSubscriptions(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7954,15 +11329,13 @@ export const getAccountSubscriptions = (accountId_Address: Address, params: Requ
  * @name ReindexAccount
  * @request POST:/v2/accounts/{account_id}/reindex
  */
-export const reindexAccount = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<ReindexAccountData, Error>({
-        path: `/v2/accounts/${accountId}/reindex`,
-        method: 'POST',
-        ...params
-    });
-
-    return prepareResponse<ReindexAccountData>(req);
+export const reindexAccount = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().reindexAccount(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -7972,7 +11345,7 @@ export const reindexAccount = (accountId_Address: Address, params: RequestParams
  * @name SearchAccounts
  * @request GET:/v2/accounts/search
  */
-export const searchAccounts = (
+export const searchAccounts = async (
     query: {
         /**
          * @minLength 3
@@ -7982,15 +11355,12 @@ export const searchAccounts = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<SearchAccountsData, Error>({
-        path: `/v2/accounts/search`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<SearchAccountsData>(req, { $ref: '#/components/schemas/FoundAccounts' });
+    try {
+        const result = await getDefaultClient().searchAccounts(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8000,7 +11370,7 @@ export const searchAccounts = (
  * @name GetAccountDnsExpiring
  * @request GET:/v2/accounts/{account_id}/dns/expiring
  */
-export const getAccountDnsExpiring = (
+export const getAccountDnsExpiring = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -8012,18 +11382,16 @@ export const getAccountDnsExpiring = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountDnsExpiringData, Error>({
-        path: `/v2/accounts/${accountId}/dns/expiring`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountDnsExpiringData>(req, {
-        $ref: '#/components/schemas/DnsExpiring'
-    });
+    try {
+        const result = await getDefaultClient().getAccountDnsExpiring(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8033,20 +11401,16 @@ export const getAccountDnsExpiring = (
  * @name GetAccountPublicKey
  * @request GET:/v2/accounts/{account_id}/publickey
  */
-export const getAccountPublicKey = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountPublicKeyData, Error>({
-        path: `/v2/accounts/${accountId}/publickey`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountPublicKeyData>(req, {
-        type: 'object',
-        required: ['public_key'],
-        properties: { public_key: { type: 'string' } }
-    });
+export const getAccountPublicKey = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getAccountPublicKey(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8056,18 +11420,16 @@ export const getAccountPublicKey = (accountId_Address: Address, params: RequestP
  * @name GetAccountMultisigs
  * @request GET:/v2/accounts/{account_id}/multisigs
  */
-export const getAccountMultisigs = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountMultisigsData, Error>({
-        path: `/v2/accounts/${accountId}/multisigs`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountMultisigsData>(req, {
-        $ref: '#/components/schemas/Multisigs'
-    });
+export const getAccountMultisigs = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getAccountMultisigs(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8077,7 +11439,7 @@ export const getAccountMultisigs = (accountId_Address: Address, params: RequestP
  * @name GetAccountDiff
  * @request GET:/v2/accounts/{account_id}/diff
  */
-export const getAccountDiff = (
+export const getAccountDiff = async (
     accountId_Address: Address,
     query: {
         /**
@@ -8095,20 +11457,12 @@ export const getAccountDiff = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountDiffData, Error>({
-        path: `/v2/accounts/${accountId}/diff`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountDiffData>(req, {
-        type: 'object',
-        required: ['balance_change'],
-        properties: { balance_change: { type: 'integer', format: 'int64' } }
-    });
+    try {
+        const result = await getDefaultClient().getAccountDiff(accountId_Address, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8118,7 +11472,7 @@ export const getAccountDiff = (
  * @name GetAccountExtraCurrencyHistoryById
  * @request GET:/v2/accounts/{account_id}/extra-currency/{id}/history
  */
-export const getAccountExtraCurrencyHistoryById = (
+export const getAccountExtraCurrencyHistoryById = async (
     accountId_Address: Address,
     id: number,
     query: {
@@ -8149,18 +11503,17 @@ export const getAccountExtraCurrencyHistoryById = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountExtraCurrencyHistoryByIdData, Error>({
-        path: `/v2/accounts/${accountId}/extra-currency/${id}/history`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountExtraCurrencyHistoryByIdData>(req, {
-        $ref: '#/components/schemas/AccountEvents'
-    });
+    try {
+        const result = await getDefaultClient().getAccountExtraCurrencyHistoryById(
+            accountId_Address,
+            id,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8170,7 +11523,7 @@ export const getAccountExtraCurrencyHistoryById = (
  * @name GetJettonAccountHistoryById
  * @request GET:/v2/jettons/{jetton_id}/accounts/{account_id}/history
  */
-export const getJettonAccountHistoryById = (
+export const getJettonAccountHistoryById = async (
     accountId_Address: Address,
     jettonId_Address: Address,
     query: {
@@ -8201,19 +11554,17 @@ export const getJettonAccountHistoryById = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const jettonId = jettonId_Address.toRawString();
-    const req = getHttpClient().request<GetJettonAccountHistoryByIdData, Error>({
-        path: `/v2/jettons/${jettonId}/accounts/${accountId}/history`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetJettonAccountHistoryByIdData>(req, {
-        $ref: '#/components/schemas/JettonOperations'
-    });
+    try {
+        const result = await getDefaultClient().getJettonAccountHistoryById(
+            accountId_Address,
+            jettonId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8223,7 +11574,7 @@ export const getJettonAccountHistoryById = (
  * @name GetAccountNftHistory
  * @request GET:/v2/accounts/{account_id}/nfts/history
  */
-export const getAccountNftHistory = (
+export const getAccountNftHistory = async (
     accountId_Address: Address,
     query: {
         /**
@@ -8241,18 +11592,16 @@ export const getAccountNftHistory = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountNftHistoryData, Error>({
-        path: `/v2/accounts/${accountId}/nfts/history`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountNftHistoryData>(req, {
-        $ref: '#/components/schemas/NftOperations'
-    });
+    try {
+        const result = await getDefaultClient().getAccountNftHistory(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8262,7 +11611,7 @@ export const getAccountNftHistory = (
  * @name GetNftCollections
  * @request GET:/v2/nfts/collections
  */
-export const getNftCollections = (
+export const getNftCollections = async (
     query?: {
         /**
          * @format int32
@@ -8282,17 +11631,12 @@ export const getNftCollections = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetNftCollectionsData, Error>({
-        path: `/v2/nfts/collections`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetNftCollectionsData>(req, {
-        $ref: '#/components/schemas/NftCollections'
-    });
+    try {
+        const result = await getDefaultClient().getNftCollections(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8302,18 +11646,13 @@ export const getNftCollections = (
  * @name GetNftCollection
  * @request GET:/v2/nfts/collections/{account_id}
  */
-export const getNftCollection = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetNftCollectionData, Error>({
-        path: `/v2/nfts/collections/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetNftCollectionData>(req, {
-        $ref: '#/components/schemas/NftCollection'
-    });
+export const getNftCollection = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getNftCollection(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8323,29 +11662,18 @@ export const getNftCollection = (accountId_Address: Address, params: RequestPara
  * @name GetNftCollectionItemsByAddresses
  * @request POST:/v2/nfts/collections/_bulk
  */
-export const getNftCollectionItemsByAddresses = (
+export const getNftCollectionItemsByAddresses = async (
     data: {
         accountIds: Address[];
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetNftCollectionItemsByAddressesData, Error>({
-        path: `/v2/nfts/collections/_bulk`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['accountIds'],
-            properties: {
-                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetNftCollectionItemsByAddressesData>(req, {
-        $ref: '#/components/schemas/NftCollections'
-    });
+    try {
+        const result = await getDefaultClient().getNftCollectionItemsByAddresses(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8355,7 +11683,7 @@ export const getNftCollectionItemsByAddresses = (
  * @name GetItemsFromCollection
  * @request GET:/v2/nfts/collections/{account_id}/items
  */
-export const getItemsFromCollection = (
+export const getItemsFromCollection = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -8372,18 +11700,16 @@ export const getItemsFromCollection = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetItemsFromCollectionData, Error>({
-        path: `/v2/nfts/collections/${accountId}/items`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetItemsFromCollectionData>(req, {
-        $ref: '#/components/schemas/NftItems'
-    });
+    try {
+        const result = await getDefaultClient().getItemsFromCollection(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8393,29 +11719,18 @@ export const getItemsFromCollection = (
  * @name GetNftItemsByAddresses
  * @request POST:/v2/nfts/_bulk
  */
-export const getNftItemsByAddresses = (
+export const getNftItemsByAddresses = async (
     data: {
         accountIds: Address[];
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetNftItemsByAddressesData, Error>({
-        path: `/v2/nfts/_bulk`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['accountIds'],
-            properties: {
-                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetNftItemsByAddressesData>(req, {
-        $ref: '#/components/schemas/NftItems'
-    });
+    try {
+        const result = await getDefaultClient().getNftItemsByAddresses(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8425,16 +11740,16 @@ export const getNftItemsByAddresses = (
  * @name GetNftItemByAddress
  * @request GET:/v2/nfts/{account_id}
  */
-export const getNftItemByAddress = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetNftItemByAddressData, Error>({
-        path: `/v2/nfts/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetNftItemByAddressData>(req, { $ref: '#/components/schemas/NftItem' });
+export const getNftItemByAddress = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getNftItemByAddress(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8445,7 +11760,7 @@ export const getNftItemByAddress = (accountId_Address: Address, params: RequestP
  * @request GET:/v2/nfts/{account_id}/history
  * @deprecated
  */
-export const getNftHistoryById = (
+export const getNftHistoryById = async (
     accountId_Address: Address,
     query: {
         /**
@@ -8475,18 +11790,12 @@ export const getNftHistoryById = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetNftHistoryByIdData, Error>({
-        path: `/v2/nfts/${accountId}/history`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetNftHistoryByIdData>(req, {
-        $ref: '#/components/schemas/AccountEvents'
-    });
+    try {
+        const result = await getDefaultClient().getNftHistoryById(accountId_Address, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8496,15 +11805,13 @@ export const getNftHistoryById = (
  * @name GetDnsInfo
  * @request GET:/v2/dns/{domain_name}
  */
-export const getDnsInfo = (domainName: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetDnsInfoData, Error>({
-        path: `/v2/dns/${domainName}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetDnsInfoData>(req, { $ref: '#/components/schemas/DomainInfo' });
+export const getDnsInfo = async (domainName: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getDnsInfo(domainName, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8514,7 +11821,7 @@ export const getDnsInfo = (domainName: string, params: RequestParams = {}) => {
  * @name DnsResolve
  * @request GET:/v2/dns/{domain_name}/resolve
  */
-export const dnsResolve = (
+export const dnsResolve = async (
     domainName: string,
     query?: {
         /** @default false */
@@ -8522,15 +11829,12 @@ export const dnsResolve = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<DnsResolveData, Error>({
-        path: `/v2/dns/${domainName}/resolve`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<DnsResolveData>(req, { $ref: '#/components/schemas/DnsRecord' });
+    try {
+        const result = await getDefaultClient().dnsResolve(domainName, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8540,15 +11844,13 @@ export const dnsResolve = (
  * @name GetDomainBids
  * @request GET:/v2/dns/{domain_name}/bids
  */
-export const getDomainBids = (domainName: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetDomainBidsData, Error>({
-        path: `/v2/dns/${domainName}/bids`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetDomainBidsData>(req, { $ref: '#/components/schemas/DomainBids' });
+export const getDomainBids = async (domainName: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getDomainBids(domainName, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8558,7 +11860,7 @@ export const getDomainBids = (domainName: string, params: RequestParams = {}) =>
  * @name GetAllAuctions
  * @request GET:/v2/dns/auctions
  */
-export const getAllAuctions = (
+export const getAllAuctions = async (
     query?: {
         /**
          * domain filter for current auctions "ton" or "t.me"
@@ -8568,15 +11870,12 @@ export const getAllAuctions = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetAllAuctionsData, Error>({
-        path: `/v2/dns/auctions`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAllAuctionsData>(req, { $ref: '#/components/schemas/Auctions' });
+    try {
+        const result = await getDefaultClient().getAllAuctions(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8586,15 +11885,13 @@ export const getAllAuctions = (
  * @name GetTrace
  * @request GET:/v2/traces/{trace_id}
  */
-export const getTrace = (traceId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetTraceData, Error>({
-        path: `/v2/traces/${traceId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetTraceData>(req, { $ref: '#/components/schemas/Trace' });
+export const getTrace = async (traceId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getTrace(traceId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8604,15 +11901,13 @@ export const getTrace = (traceId: string, params: RequestParams = {}) => {
  * @name GetEvent
  * @request GET:/v2/events/{event_id}
  */
-export const getEvent = (eventId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetEventData, Error>({
-        path: `/v2/events/${eventId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetEventData>(req, { $ref: '#/components/schemas/Event' });
+export const getEvent = async (eventId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getEvent(eventId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8622,7 +11917,7 @@ export const getEvent = (eventId: string, params: RequestParams = {}) => {
  * @name GetJettons
  * @request GET:/v2/jettons
  */
-export const getJettons = (
+export const getJettons = async (
     query?: {
         /**
          * @format int32
@@ -8642,15 +11937,12 @@ export const getJettons = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetJettonsData, Error>({
-        path: `/v2/jettons`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetJettonsData>(req, { $ref: '#/components/schemas/Jettons' });
+    try {
+        const result = await getDefaultClient().getJettons(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8660,16 +11952,13 @@ export const getJettons = (
  * @name GetJettonInfo
  * @request GET:/v2/jettons/{account_id}
  */
-export const getJettonInfo = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetJettonInfoData, Error>({
-        path: `/v2/jettons/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetJettonInfoData>(req, { $ref: '#/components/schemas/JettonInfo' });
+export const getJettonInfo = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getJettonInfo(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8679,29 +11968,18 @@ export const getJettonInfo = (accountId_Address: Address, params: RequestParams 
  * @name GetJettonInfosByAddresses
  * @request POST:/v2/jettons/_bulk
  */
-export const getJettonInfosByAddresses = (
+export const getJettonInfosByAddresses = async (
     data: {
         accountIds: Address[];
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetJettonInfosByAddressesData, Error>({
-        path: `/v2/jettons/_bulk`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['accountIds'],
-            properties: {
-                accountIds: { type: 'array', items: { type: 'string', format: 'address' } }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetJettonInfosByAddressesData>(req, {
-        $ref: '#/components/schemas/Jettons'
-    });
+    try {
+        const result = await getDefaultClient().getJettonInfosByAddresses(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8711,7 +11989,7 @@ export const getJettonInfosByAddresses = (
  * @name GetJettonHolders
  * @request GET:/v2/jettons/{account_id}/holders
  */
-export const getJettonHolders = (
+export const getJettonHolders = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -8729,18 +12007,12 @@ export const getJettonHolders = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetJettonHoldersData, Error>({
-        path: `/v2/jettons/${accountId}/holders`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetJettonHoldersData>(req, {
-        $ref: '#/components/schemas/JettonHolders'
-    });
+    try {
+        const result = await getDefaultClient().getJettonHolders(accountId_Address, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8750,23 +12022,21 @@ export const getJettonHolders = (
  * @name GetJettonTransferPayload
  * @request GET:/v2/jettons/{jetton_id}/transfer/{account_id}/payload
  */
-export const getJettonTransferPayload = (
+export const getJettonTransferPayload = async (
     accountId_Address: Address,
     jettonId_Address: Address,
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const jettonId = jettonId_Address.toRawString();
-    const req = getHttpClient().request<GetJettonTransferPayloadData, Error>({
-        path: `/v2/jettons/${jettonId}/transfer/${accountId}/payload`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetJettonTransferPayloadData>(req, {
-        $ref: '#/components/schemas/JettonTransferPayload'
-    });
+    try {
+        const result = await getDefaultClient().getJettonTransferPayload(
+            accountId_Address,
+            jettonId_Address,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8776,15 +12046,13 @@ export const getJettonTransferPayload = (
  * @name GetJettonsEvents
  * @request GET:/v2/events/{event_id}/jettons
  */
-export const getJettonsEvents = (eventId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetJettonsEventsData, Error>({
-        path: `/v2/events/${eventId}/jettons`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetJettonsEventsData>(req, { $ref: '#/components/schemas/Event' });
+export const getJettonsEvents = async (eventId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getJettonsEvents(eventId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8794,17 +12062,13 @@ export const getJettonsEvents = (eventId: string, params: RequestParams = {}) =>
  * @name GetExtraCurrencyInfo
  * @request GET:/v2/extra-currency/{id}
  */
-export const getExtraCurrencyInfo = (id: number, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetExtraCurrencyInfoData, Error>({
-        path: `/v2/extra-currency/${id}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetExtraCurrencyInfoData>(req, {
-        $ref: '#/components/schemas/EcPreview'
-    });
+export const getExtraCurrencyInfo = async (id: number, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getExtraCurrencyInfo(id, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8814,21 +12078,19 @@ export const getExtraCurrencyInfo = (id: number, params: RequestParams = {}) => 
  * @name GetAccountNominatorsPools
  * @request GET:/v2/staking/nominator/{account_id}/pools
  */
-export const getAccountNominatorsPools = (
+export const getAccountNominatorsPools = async (
     accountId_Address: Address,
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountNominatorsPoolsData, Error>({
-        path: `/v2/staking/nominator/${accountId}/pools`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountNominatorsPoolsData>(req, {
-        $ref: '#/components/schemas/AccountStaking'
-    });
+    try {
+        const result = await getDefaultClient().getAccountNominatorsPools(
+            accountId_Address,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8838,23 +12100,16 @@ export const getAccountNominatorsPools = (
  * @name GetStakingPoolInfo
  * @request GET:/v2/staking/pool/{account_id}
  */
-export const getStakingPoolInfo = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetStakingPoolInfoData, Error>({
-        path: `/v2/staking/pool/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetStakingPoolInfoData>(req, {
-        type: 'object',
-        required: ['implementation', 'pool'],
-        properties: {
-            implementation: { $ref: '#/components/schemas/PoolImplementation' },
-            pool: { $ref: '#/components/schemas/PoolInfo' }
-        }
-    });
+export const getStakingPoolInfo = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getStakingPoolInfo(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8864,20 +12119,16 @@ export const getStakingPoolInfo = (accountId_Address: Address, params: RequestPa
  * @name GetStakingPoolHistory
  * @request GET:/v2/staking/pool/{account_id}/history
  */
-export const getStakingPoolHistory = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetStakingPoolHistoryData, Error>({
-        path: `/v2/staking/pool/${accountId}/history`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetStakingPoolHistoryData>(req, {
-        type: 'object',
-        required: ['apy'],
-        properties: { apy: { type: 'array', items: { $ref: '#/components/schemas/ApyHistory' } } }
-    });
+export const getStakingPoolHistory = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getStakingPoolHistory(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8887,7 +12138,7 @@ export const getStakingPoolHistory = (accountId_Address: Address, params: Reques
  * @name GetStakingPools
  * @request GET:/v2/staking/pools
  */
-export const getStakingPools = (
+export const getStakingPools = async (
     query?: {
         /**
          * account ID
@@ -8903,28 +12154,12 @@ export const getStakingPools = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetStakingPoolsData, Error>({
-        path: `/v2/staking/pools`,
-        method: 'GET',
-        query: query && {
-            ...query,
-            available_for: query.available_for?.toRawString()
-        },
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetStakingPoolsData>(req, {
-        type: 'object',
-        required: ['pools', 'implementations'],
-        properties: {
-            pools: { type: 'array', items: { $ref: '#/components/schemas/PoolInfo' } },
-            implementations: {
-                type: 'object',
-                additionalProperties: { $ref: '#/components/schemas/PoolImplementation' }
-            }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getStakingPools(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8934,21 +12169,13 @@ export const getStakingPools = (
  * @name GetStorageProviders
  * @request GET:/v2/storage/providers
  */
-export const getStorageProviders = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetStorageProvidersData, Error>({
-        path: `/v2/storage/providers`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetStorageProvidersData>(req, {
-        type: 'object',
-        required: ['providers'],
-        properties: {
-            providers: { type: 'array', items: { $ref: '#/components/schemas/StorageProvider' } }
-        }
-    });
+export const getStorageProviders = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getStorageProviders(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -8958,7 +12185,7 @@ export const getStorageProviders = (params: RequestParams = {}) => {
  * @name GetRates
  * @request GET:/v2/rates
  */
-export const getRates = (
+export const getRates = async (
     query: {
         /**
          * accept cryptocurrencies or jetton master addresses, separated by commas
@@ -8975,25 +12202,12 @@ export const getRates = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRatesData, Error>({
-        path: `/v2/rates`,
-        method: 'GET',
-        query: query,
-        queryImplode: ['tokens', 'currencies'],
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRatesData>(req, {
-        type: 'object',
-        required: ['rates'],
-        properties: {
-            rates: {
-                type: 'object',
-                additionalProperties: { $ref: '#/components/schemas/TokenRates' }
-            }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRates(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9003,7 +12217,7 @@ export const getRates = (
  * @name GetChartRates
  * @request GET:/v2/rates/chart
  */
-export const getChartRates = (
+export const getChartRates = async (
     query: {
         /** accept cryptocurrencies or jetton master addresses */
         token: Address | string;
@@ -9031,21 +12245,12 @@ export const getChartRates = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetChartRatesData, Error>({
-        path: `/v2/rates/chart`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetChartRatesData>(req, {
-        type: 'object',
-        required: ['points'],
-        properties: {
-            points: { type: 'array', items: { $ref: '#/components/schemas/ChartPoints' } }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getChartRates(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9055,21 +12260,13 @@ export const getChartRates = (
  * @name GetMarketsRates
  * @request GET:/v2/rates/markets
  */
-export const getMarketsRates = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetMarketsRatesData, Error>({
-        path: `/v2/rates/markets`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetMarketsRatesData>(req, {
-        type: 'object',
-        required: ['markets'],
-        properties: {
-            markets: { type: 'array', items: { $ref: '#/components/schemas/MarketTonRates' } }
-        }
-    });
+export const getMarketsRates = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getMarketsRates(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9079,19 +12276,13 @@ export const getMarketsRates = (params: RequestParams = {}) => {
  * @name GetTonConnectPayload
  * @request GET:/v2/tonconnect/payload
  */
-export const getTonConnectPayload = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetTonConnectPayloadData, Error>({
-        path: `/v2/tonconnect/payload`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetTonConnectPayloadData>(req, {
-        type: 'object',
-        required: ['payload'],
-        properties: { payload: { type: 'string' } }
-    });
+export const getTonConnectPayload = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getTonConnectPayload(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9101,28 +12292,19 @@ export const getTonConnectPayload = (params: RequestParams = {}) => {
  * @name GetAccountInfoByStateInit
  * @request POST:/v2/tonconnect/stateinit
  */
-export const getAccountInfoByStateInit = (
+export const getAccountInfoByStateInit = async (
     data: {
         /** @format cell-base64 */
         stateInit: Cell;
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetAccountInfoByStateInitData, Error>({
-        path: `/v2/tonconnect/stateinit`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['stateInit'],
-            properties: { stateInit: { type: 'string', format: 'cell-base64' } }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountInfoByStateInitData>(req, {
-        $ref: '#/components/schemas/AccountInfoByStateInit'
-    });
+    try {
+        const result = await getDefaultClient().getAccountInfoByStateInit(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9132,7 +12314,7 @@ export const getAccountInfoByStateInit = (
  * @name TonConnectProof
  * @request POST:/v2/wallet/auth/proof
  */
-export const tonConnectProof = (
+export const tonConnectProof = async (
     data: {
         /**
          * @format address
@@ -9159,43 +12341,12 @@ export const tonConnectProof = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<TonConnectProofData, Error>({
-        path: `/v2/wallet/auth/proof`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['address', 'proof'],
-            properties: {
-                address: { type: 'string', format: 'address' },
-                proof: {
-                    type: 'object',
-                    required: ['timestamp', 'domain', 'signature', 'payload'],
-                    properties: {
-                        timestamp: { type: 'integer', format: 'int64' },
-                        domain: {
-                            type: 'object',
-                            required: ['value'],
-                            properties: {
-                                lengthBytes: { type: 'integer', format: 'int32' },
-                                value: { type: 'string' }
-                            }
-                        },
-                        signature: { type: 'string' },
-                        payload: { type: 'string' },
-                        stateInit: { type: 'string', format: 'cell-base64' }
-                    }
-                }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<TonConnectProofData>(req, {
-        type: 'object',
-        required: ['token'],
-        properties: { token: { type: 'string' } }
-    });
+    try {
+        const result = await getDefaultClient().tonConnectProof(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9205,16 +12356,13 @@ export const tonConnectProof = (
  * @name GetAccountSeqno
  * @request GET:/v2/wallet/{account_id}/seqno
  */
-export const getAccountSeqno = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetAccountSeqnoData, Error>({
-        path: `/v2/wallet/${accountId}/seqno`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAccountSeqnoData>(req, { $ref: '#/components/schemas/Seqno' });
+export const getAccountSeqno = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getAccountSeqno(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9224,16 +12372,13 @@ export const getAccountSeqno = (accountId_Address: Address, params: RequestParam
  * @name GetWalletInfo
  * @request GET:/v2/wallet/{account_id}
  */
-export const getWalletInfo = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetWalletInfoData, Error>({
-        path: `/v2/wallet/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetWalletInfoData>(req, { $ref: '#/components/schemas/Wallet' });
+export const getWalletInfo = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getWalletInfo(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9243,17 +12388,13 @@ export const getWalletInfo = (accountId_Address: Address, params: RequestParams 
  * @name GetWalletsByPublicKey
  * @request GET:/v2/pubkeys/{public_key}/wallets
  */
-export const getWalletsByPublicKey = (publicKey: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetWalletsByPublicKeyData, Error>({
-        path: `/v2/pubkeys/${publicKey}/wallets`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetWalletsByPublicKeyData>(req, {
-        $ref: '#/components/schemas/Wallets'
-    });
+export const getWalletsByPublicKey = async (publicKey: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getWalletsByPublicKey(publicKey, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9263,15 +12404,13 @@ export const getWalletsByPublicKey = (publicKey: string, params: RequestParams =
  * @name GaslessConfig
  * @request GET:/v2/gasless/config
  */
-export const gaslessConfig = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GaslessConfigData, Error>({
-        path: `/v2/gasless/config`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GaslessConfigData>(req, { $ref: '#/components/schemas/GaslessConfig' });
+export const gaslessConfig = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().gaslessConfig(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9281,7 +12420,7 @@ export const gaslessConfig = (params: RequestParams = {}) => {
  * @name GaslessEstimate
  * @request POST:/v2/gasless/estimate/{master_id}
  */
-export const gaslessEstimate = (
+export const gaslessEstimate = async (
     masterId_Address: Address,
     data: {
         /**
@@ -9301,35 +12440,12 @@ export const gaslessEstimate = (
     },
     params: RequestParams = {}
 ) => {
-    const masterId = masterId_Address.toRawString();
-    const req = getHttpClient().request<GaslessEstimateData, Error>({
-        path: `/v2/gasless/estimate/${masterId}`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['messages', 'walletAddress', 'walletPublicKey'],
-            properties: {
-                throwErrorIfNotEnoughJettons: { type: 'boolean', default: false },
-                returnEmulation: { type: 'boolean', default: false },
-                walletAddress: { type: 'string', format: 'address' },
-                walletPublicKey: { type: 'string' },
-                messages: {
-                    type: 'array',
-                    items: {
-                        type: 'object',
-                        required: ['boc'],
-                        properties: { boc: { type: 'string', format: 'cell' } }
-                    }
-                }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GaslessEstimateData>(req, {
-        $ref: '#/components/schemas/SignRawParams'
-    });
+    try {
+        const result = await getDefaultClient().gaslessEstimate(masterId_Address, data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9339,7 +12455,7 @@ export const gaslessEstimate = (
  * @name GaslessSend
  * @request POST:/v2/gasless/send
  */
-export const gaslessSend = (
+export const gaslessSend = async (
     data: {
         /** hex encoded public key */
         walletPublicKey: string;
@@ -9348,22 +12464,12 @@ export const gaslessSend = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GaslessSendData, Error>({
-        path: `/v2/gasless/send`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['boc', 'walletPublicKey'],
-            properties: {
-                walletPublicKey: { type: 'string' },
-                boc: { type: 'string', format: 'cell' }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GaslessSendData>(req, { $ref: '#/components/schemas/GaslessTx' });
+    try {
+        const result = await getDefaultClient().gaslessSend(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9373,23 +12479,13 @@ export const gaslessSend = (
  * @name GetRawMasterchainInfo
  * @request GET:/v2/liteserver/get_masterchain_info
  */
-export const getRawMasterchainInfo = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetRawMasterchainInfoData, Error>({
-        path: `/v2/liteserver/get_masterchain_info`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawMasterchainInfoData>(req, {
-        type: 'object',
-        required: ['last', 'state_root_hash', 'init'],
-        properties: {
-            last: { $ref: '#/components/schemas/BlockRaw' },
-            state_root_hash: { type: 'string' },
-            init: { $ref: '#/components/schemas/InitStateRaw' }
-        }
-    });
+export const getRawMasterchainInfo = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getRawMasterchainInfo(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9399,7 +12495,7 @@ export const getRawMasterchainInfo = (params: RequestParams = {}) => {
  * @name GetRawMasterchainInfoExt
  * @request GET:/v2/liteserver/get_masterchain_info_ext
  */
-export const getRawMasterchainInfoExt = (
+export const getRawMasterchainInfoExt = async (
     query: {
         /**
          * mode
@@ -9410,37 +12506,12 @@ export const getRawMasterchainInfoExt = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRawMasterchainInfoExtData, Error>({
-        path: `/v2/liteserver/get_masterchain_info_ext`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawMasterchainInfoExtData>(req, {
-        type: 'object',
-        required: [
-            'mode',
-            'version',
-            'capabilities',
-            'last',
-            'last_utime',
-            'now',
-            'state_root_hash',
-            'init'
-        ],
-        properties: {
-            mode: { type: 'integer', format: 'int32' },
-            version: { type: 'integer', format: 'int32' },
-            capabilities: { type: 'integer', format: 'int64' },
-            last: { $ref: '#/components/schemas/BlockRaw' },
-            last_utime: { type: 'integer', format: 'int32' },
-            now: { type: 'integer', format: 'int32' },
-            state_root_hash: { type: 'string' },
-            init: { $ref: '#/components/schemas/InitStateRaw' }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawMasterchainInfoExt(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9450,19 +12521,13 @@ export const getRawMasterchainInfoExt = (
  * @name GetRawTime
  * @request GET:/v2/liteserver/get_time
  */
-export const getRawTime = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetRawTimeData, Error>({
-        path: `/v2/liteserver/get_time`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawTimeData>(req, {
-        type: 'object',
-        required: ['time'],
-        properties: { time: { type: 'integer', format: 'int32' } }
-    });
+export const getRawTime = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getRawTime(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9472,19 +12537,13 @@ export const getRawTime = (params: RequestParams = {}) => {
  * @name GetRawBlockchainBlock
  * @request GET:/v2/liteserver/get_block/{block_id}
  */
-export const getRawBlockchainBlock = (blockId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetRawBlockchainBlockData, Error>({
-        path: `/v2/liteserver/get_block/${blockId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawBlockchainBlockData>(req, {
-        type: 'object',
-        required: ['id', 'data'],
-        properties: { id: { $ref: '#/components/schemas/BlockRaw' }, data: { type: 'string' } }
-    });
+export const getRawBlockchainBlock = async (blockId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getRawBlockchainBlock(blockId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9494,24 +12553,13 @@ export const getRawBlockchainBlock = (blockId: string, params: RequestParams = {
  * @name GetRawBlockchainBlockState
  * @request GET:/v2/liteserver/get_state/{block_id}
  */
-export const getRawBlockchainBlockState = (blockId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetRawBlockchainBlockStateData, Error>({
-        path: `/v2/liteserver/get_state/${blockId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawBlockchainBlockStateData>(req, {
-        type: 'object',
-        required: ['id', 'root_hash', 'file_hash', 'data'],
-        properties: {
-            id: { $ref: '#/components/schemas/BlockRaw' },
-            root_hash: { type: 'string' },
-            file_hash: { type: 'string' },
-            data: { type: 'string' }
-        }
-    });
+export const getRawBlockchainBlockState = async (blockId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getRawBlockchainBlockState(blockId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9521,7 +12569,7 @@ export const getRawBlockchainBlockState = (blockId: string, params: RequestParam
  * @name GetRawBlockchainBlockHeader
  * @request GET:/v2/liteserver/get_block_header/{block_id}
  */
-export const getRawBlockchainBlockHeader = (
+export const getRawBlockchainBlockHeader = async (
     blockId: string,
     query: {
         /**
@@ -9533,23 +12581,12 @@ export const getRawBlockchainBlockHeader = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRawBlockchainBlockHeaderData, Error>({
-        path: `/v2/liteserver/get_block_header/${blockId}`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawBlockchainBlockHeaderData>(req, {
-        type: 'object',
-        required: ['id', 'mode', 'header_proof'],
-        properties: {
-            id: { $ref: '#/components/schemas/BlockRaw' },
-            mode: { type: 'integer', format: 'int32' },
-            header_proof: { type: 'string' }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawBlockchainBlockHeader(blockId, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9559,30 +12596,19 @@ export const getRawBlockchainBlockHeader = (
  * @name SendRawMessage
  * @request POST:/v2/liteserver/send_message
  */
-export const sendRawMessage = (
+export const sendRawMessage = async (
     data: {
         /** @format cell-base64 */
         body: Cell;
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<SendRawMessageData, Error>({
-        path: `/v2/liteserver/send_message`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['body'],
-            properties: { body: { type: 'string', format: 'cell-base64' } }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<SendRawMessageData>(req, {
-        type: 'object',
-        required: ['code'],
-        properties: { code: { type: 'integer', format: 'int32' } }
-    });
+    try {
+        const result = await getDefaultClient().sendRawMessage(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9592,7 +12618,7 @@ export const sendRawMessage = (
  * @name GetRawAccountState
  * @request GET:/v2/liteserver/get_account_state/{account_id}
  */
-export const getRawAccountState = (
+export const getRawAccountState = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -9603,26 +12629,16 @@ export const getRawAccountState = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetRawAccountStateData, Error>({
-        path: `/v2/liteserver/get_account_state/${accountId}`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawAccountStateData>(req, {
-        type: 'object',
-        required: ['id', 'shardblk', 'shard_proof', 'proof', 'state'],
-        properties: {
-            id: { $ref: '#/components/schemas/BlockRaw' },
-            shardblk: { $ref: '#/components/schemas/BlockRaw' },
-            shard_proof: { type: 'string' },
-            proof: { type: 'string' },
-            state: { type: 'string' }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawAccountState(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9632,7 +12648,7 @@ export const getRawAccountState = (
  * @name GetRawShardInfo
  * @request GET:/v2/liteserver/get_shard_info/{block_id}
  */
-export const getRawShardInfo = (
+export const getRawShardInfo = async (
     blockId: string,
     query: {
         /**
@@ -9655,24 +12671,12 @@ export const getRawShardInfo = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRawShardInfoData, Error>({
-        path: `/v2/liteserver/get_shard_info/${blockId}`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawShardInfoData>(req, {
-        type: 'object',
-        required: ['id', 'shardblk', 'shard_proof', 'shard_descr'],
-        properties: {
-            id: { $ref: '#/components/schemas/BlockRaw' },
-            shardblk: { $ref: '#/components/schemas/BlockRaw' },
-            shard_proof: { type: 'string' },
-            shard_descr: { type: 'string' }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawShardInfo(blockId, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9682,23 +12686,13 @@ export const getRawShardInfo = (
  * @name GetAllRawShardsInfo
  * @request GET:/v2/liteserver/get_all_shards_info/{block_id}
  */
-export const getAllRawShardsInfo = (blockId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetAllRawShardsInfoData, Error>({
-        path: `/v2/liteserver/get_all_shards_info/${blockId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetAllRawShardsInfoData>(req, {
-        type: 'object',
-        required: ['id', 'proof', 'data'],
-        properties: {
-            id: { $ref: '#/components/schemas/BlockRaw' },
-            proof: { type: 'string' },
-            data: { type: 'string' }
-        }
-    });
+export const getAllRawShardsInfo = async (blockId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getAllRawShardsInfo(blockId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9708,7 +12702,7 @@ export const getAllRawShardsInfo = (blockId: string, params: RequestParams = {})
  * @name GetRawTransactions
  * @request GET:/v2/liteserver/get_transactions/{account_id}
  */
-export const getRawTransactions = (
+export const getRawTransactions = async (
     accountId_Address: Address,
     query: {
         /**
@@ -9731,23 +12725,16 @@ export const getRawTransactions = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetRawTransactionsData, Error>({
-        path: `/v2/liteserver/get_transactions/${accountId}`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawTransactionsData>(req, {
-        type: 'object',
-        required: ['ids', 'transactions'],
-        properties: {
-            ids: { type: 'array', items: { $ref: '#/components/schemas/BlockRaw' } },
-            transactions: { type: 'string' }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawTransactions(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9757,7 +12744,7 @@ export const getRawTransactions = (
  * @name GetRawListBlockTransactions
  * @request GET:/v2/liteserver/list_block_transactions/{block_id}
  */
-export const getRawListBlockTransactions = (
+export const getRawListBlockTransactions = async (
     blockId: string,
     query: {
         /**
@@ -9787,41 +12774,12 @@ export const getRawListBlockTransactions = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRawListBlockTransactionsData, Error>({
-        path: `/v2/liteserver/list_block_transactions/${blockId}`,
-        method: 'GET',
-        query: query && {
-            ...query,
-            account_id: query.account_id?.toRawString()
-        },
-        queryImplode: ['account_id'],
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawListBlockTransactionsData>(req, {
-        type: 'object',
-        required: ['id', 'req_count', 'incomplete', 'ids', 'proof'],
-        properties: {
-            id: { $ref: '#/components/schemas/BlockRaw' },
-            req_count: { type: 'integer', format: 'int32' },
-            incomplete: { type: 'boolean' },
-            ids: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    required: ['mode'],
-                    properties: {
-                        mode: { type: 'integer', format: 'int32' },
-                        account: { type: 'string' },
-                        lt: { type: 'integer', format: 'bigint', 'x-js-format': 'bigint' },
-                        hash: { type: 'string' }
-                    }
-                }
-            },
-            proof: { type: 'string' }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawListBlockTransactions(blockId, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9831,7 +12789,7 @@ export const getRawListBlockTransactions = (
  * @name GetRawBlockProof
  * @request GET:/v2/liteserver/get_block_proof
  */
-export const getRawBlockProof = (
+export const getRawBlockProof = async (
     query: {
         /**
          * known block: (workchain,shard,seqno,root_hash,file_hash)
@@ -9852,92 +12810,12 @@ export const getRawBlockProof = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRawBlockProofData, Error>({
-        path: `/v2/liteserver/get_block_proof`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawBlockProofData>(req, {
-        type: 'object',
-        required: ['complete', 'from', 'to', 'steps'],
-        properties: {
-            complete: { type: 'boolean' },
-            from: { $ref: '#/components/schemas/BlockRaw' },
-            to: { $ref: '#/components/schemas/BlockRaw' },
-            steps: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    required: ['lite_server_block_link_back', 'lite_server_block_link_forward'],
-                    properties: {
-                        lite_server_block_link_back: {
-                            type: 'object',
-                            required: [
-                                'to_key_block',
-                                'from',
-                                'to',
-                                'dest_proof',
-                                'proof',
-                                'state_proof'
-                            ],
-                            properties: {
-                                to_key_block: { type: 'boolean' },
-                                from: { $ref: '#/components/schemas/BlockRaw' },
-                                to: { $ref: '#/components/schemas/BlockRaw' },
-                                dest_proof: { type: 'string' },
-                                proof: { type: 'string' },
-                                state_proof: { type: 'string' }
-                            }
-                        },
-                        lite_server_block_link_forward: {
-                            type: 'object',
-                            required: [
-                                'to_key_block',
-                                'from',
-                                'to',
-                                'dest_proof',
-                                'config_proof',
-                                'signatures'
-                            ],
-                            properties: {
-                                to_key_block: { type: 'boolean' },
-                                from: { $ref: '#/components/schemas/BlockRaw' },
-                                to: { $ref: '#/components/schemas/BlockRaw' },
-                                dest_proof: { type: 'string' },
-                                config_proof: { type: 'string' },
-                                signatures: {
-                                    type: 'object',
-                                    required: [
-                                        'validator_set_hash',
-                                        'catchain_seqno',
-                                        'signatures'
-                                    ],
-                                    properties: {
-                                        validator_set_hash: { type: 'integer', format: 'int64' },
-                                        catchain_seqno: { type: 'integer', format: 'int32' },
-                                        signatures: {
-                                            type: 'array',
-                                            items: {
-                                                type: 'object',
-                                                required: ['node_id_short', 'signature'],
-                                                properties: {
-                                                    node_id_short: { type: 'string' },
-                                                    signature: { type: 'string' }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawBlockProof(query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9947,7 +12825,7 @@ export const getRawBlockProof = (
  * @name GetRawConfig
  * @request GET:/v2/liteserver/get_config_all/{block_id}
  */
-export const getRawConfig = (
+export const getRawConfig = async (
     blockId: string,
     query: {
         /**
@@ -9959,24 +12837,12 @@ export const getRawConfig = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<GetRawConfigData, Error>({
-        path: `/v2/liteserver/get_config_all/${blockId}`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawConfigData>(req, {
-        type: 'object',
-        required: ['mode', 'id', 'state_proof', 'config_proof'],
-        properties: {
-            mode: { type: 'integer', format: 'int32' },
-            id: { $ref: '#/components/schemas/BlockRaw' },
-            state_proof: { type: 'string' },
-            config_proof: { type: 'string' }
-        }
-    });
+    try {
+        const result = await getDefaultClient().getRawConfig(blockId, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -9986,32 +12852,13 @@ export const getRawConfig = (
  * @name GetRawShardBlockProof
  * @request GET:/v2/liteserver/get_shard_block_proof/{block_id}
  */
-export const getRawShardBlockProof = (blockId: string, params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetRawShardBlockProofData, Error>({
-        path: `/v2/liteserver/get_shard_block_proof/${blockId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetRawShardBlockProofData>(req, {
-        type: 'object',
-        required: ['masterchain_id', 'links'],
-        properties: {
-            masterchain_id: { $ref: '#/components/schemas/BlockRaw' },
-            links: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    required: ['id', 'proof'],
-                    properties: {
-                        id: { $ref: '#/components/schemas/BlockRaw' },
-                        proof: { type: 'string' }
-                    }
-                }
-            }
-        }
-    });
+export const getRawShardBlockProof = async (blockId: string, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getRawShardBlockProof(blockId, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10021,32 +12868,13 @@ export const getRawShardBlockProof = (blockId: string, params: RequestParams = {
  * @name GetOutMsgQueueSizes
  * @request GET:/v2/liteserver/get_out_msg_queue_sizes
  */
-export const getOutMsgQueueSizes = (params: RequestParams = {}) => {
-    const req = getHttpClient().request<GetOutMsgQueueSizesData, Error>({
-        path: `/v2/liteserver/get_out_msg_queue_sizes`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetOutMsgQueueSizesData>(req, {
-        type: 'object',
-        required: ['ext_msg_queue_size_limit', 'shards'],
-        properties: {
-            ext_msg_queue_size_limit: { type: 'integer', format: 'uint32' },
-            shards: {
-                type: 'array',
-                items: {
-                    type: 'object',
-                    required: ['id', 'size'],
-                    properties: {
-                        id: { $ref: '#/components/schemas/BlockRaw' },
-                        size: { type: 'integer', format: 'uint32' }
-                    }
-                }
-            }
-        }
-    });
+export const getOutMsgQueueSizes = async (params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getOutMsgQueueSizes(params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10056,16 +12884,16 @@ export const getOutMsgQueueSizes = (params: RequestParams = {}) => {
  * @name GetMultisigAccount
  * @request GET:/v2/multisig/{account_id}
  */
-export const getMultisigAccount = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetMultisigAccountData, Error>({
-        path: `/v2/multisig/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetMultisigAccountData>(req, { $ref: '#/components/schemas/Multisig' });
+export const getMultisigAccount = async (
+    accountId_Address: Address,
+    params: RequestParams = {}
+) => {
+    try {
+        const result = await getDefaultClient().getMultisigAccount(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10075,18 +12903,13 @@ export const getMultisigAccount = (accountId_Address: Address, params: RequestPa
  * @name GetMultisigOrder
  * @request GET:/v2/multisig/order/{account_id}
  */
-export const getMultisigOrder = (accountId_Address: Address, params: RequestParams = {}) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetMultisigOrderData, Error>({
-        path: `/v2/multisig/order/${accountId}`,
-        method: 'GET',
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetMultisigOrderData>(req, {
-        $ref: '#/components/schemas/MultisigOrder'
-    });
+export const getMultisigOrder = async (accountId_Address: Address, params: RequestParams = {}) => {
+    try {
+        const result = await getDefaultClient().getMultisigOrder(accountId_Address, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10096,26 +12919,19 @@ export const getMultisigOrder = (accountId_Address: Address, params: RequestPara
  * @name DecodeMessage
  * @request POST:/v2/message/decode
  */
-export const decodeMessage = (
+export const decodeMessage = async (
     data: {
         /** @format cell */
         boc: Cell;
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<DecodeMessageData, Error>({
-        path: `/v2/message/decode`,
-        method: 'POST',
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['boc'],
-            properties: { boc: { type: 'string', format: 'cell' } }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<DecodeMessageData>(req, { $ref: '#/components/schemas/DecodedMessage' });
+    try {
+        const result = await getDefaultClient().decodeMessage(data, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10125,7 +12941,7 @@ export const decodeMessage = (
  * @name EmulateMessageToEvent
  * @request POST:/v2/events/emulate
  */
-export const emulateMessageToEvent = (
+export const emulateMessageToEvent = async (
     data: {
         /** @format cell */
         boc: Cell;
@@ -10135,20 +12951,12 @@ export const emulateMessageToEvent = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<EmulateMessageToEventData, Error>({
-        path: `/v2/events/emulate`,
-        method: 'POST',
-        query: query,
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['boc'],
-            properties: { boc: { type: 'string', format: 'cell' } }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<EmulateMessageToEventData>(req, { $ref: '#/components/schemas/Event' });
+    try {
+        const result = await getDefaultClient().emulateMessageToEvent(data, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10158,7 +12966,7 @@ export const emulateMessageToEvent = (
  * @name EmulateMessageToTrace
  * @request POST:/v2/traces/emulate
  */
-export const emulateMessageToTrace = (
+export const emulateMessageToTrace = async (
     data: {
         /** @format cell */
         boc: Cell;
@@ -10168,20 +12976,12 @@ export const emulateMessageToTrace = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<EmulateMessageToTraceData, Error>({
-        path: `/v2/traces/emulate`,
-        method: 'POST',
-        query: query,
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['boc'],
-            properties: { boc: { type: 'string', format: 'cell' } }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<EmulateMessageToTraceData>(req, { $ref: '#/components/schemas/Trace' });
+    try {
+        const result = await getDefaultClient().emulateMessageToTrace(data, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10191,7 +12991,7 @@ export const emulateMessageToTrace = (
  * @name EmulateMessageToWallet
  * @request POST:/v2/wallet/emulate
  */
-export const emulateMessageToWallet = (
+export const emulateMessageToWallet = async (
     data: {
         /** @format cell */
         boc: Cell;
@@ -10215,35 +13015,12 @@ export const emulateMessageToWallet = (
     },
     params: RequestParams = {}
 ) => {
-    const req = getHttpClient().request<EmulateMessageToWalletData, Error>({
-        path: `/v2/wallet/emulate`,
-        method: 'POST',
-        query: query,
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['boc'],
-            properties: {
-                boc: { type: 'string', format: 'cell' },
-                params: {
-                    type: 'array',
-                    items: {
-                        type: 'object',
-                        required: ['address'],
-                        properties: {
-                            address: { type: 'string', format: 'address' },
-                            balance: { type: 'integer', format: 'bigint', 'x-js-format': 'bigint' }
-                        }
-                    }
-                }
-            }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<EmulateMessageToWalletData>(req, {
-        $ref: '#/components/schemas/MessageConsequences'
-    });
+    try {
+        const result = await getDefaultClient().emulateMessageToWallet(data, query, params);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10253,7 +13030,7 @@ export const emulateMessageToWallet = (
  * @name EmulateMessageToAccountEvent
  * @request POST:/v2/accounts/{account_id}/events/emulate
  */
-export const emulateMessageToAccountEvent = (
+export const emulateMessageToAccountEvent = async (
     accountId_Address: Address,
     data: {
         /** @format cell */
@@ -10264,23 +13041,17 @@ export const emulateMessageToAccountEvent = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<EmulateMessageToAccountEventData, Error>({
-        path: `/v2/accounts/${accountId}/events/emulate`,
-        method: 'POST',
-        query: query,
-        body: prepareRequestData(data, {
-            type: 'object',
-            required: ['boc'],
-            properties: { boc: { type: 'string', format: 'cell' } }
-        }),
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<EmulateMessageToAccountEventData>(req, {
-        $ref: '#/components/schemas/AccountEvent'
-    });
+    try {
+        const result = await getDefaultClient().emulateMessageToAccountEvent(
+            accountId_Address,
+            data,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };
 
 /**
@@ -10290,7 +13061,7 @@ export const emulateMessageToAccountEvent = (
  * @name GetPurchaseHistory
  * @request GET:/v2/purchases/{account_id}/history
  */
-export const getPurchaseHistory = (
+export const getPurchaseHistory = async (
     accountId_Address: Address,
     query?: {
         /**
@@ -10309,16 +13080,14 @@ export const getPurchaseHistory = (
     },
     params: RequestParams = {}
 ) => {
-    const accountId = accountId_Address.toRawString();
-    const req = getHttpClient().request<GetPurchaseHistoryData, Error>({
-        path: `/v2/purchases/${accountId}/history`,
-        method: 'GET',
-        query: query,
-        format: 'json',
-        ...params
-    });
-
-    return prepareResponse<GetPurchaseHistoryData>(req, {
-        $ref: '#/components/schemas/AccountPurchases'
-    });
+    try {
+        const result = await getDefaultClient().getPurchaseHistory(
+            accountId_Address,
+            query,
+            params
+        );
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
 };

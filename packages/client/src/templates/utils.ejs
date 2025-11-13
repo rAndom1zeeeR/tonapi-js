@@ -27,47 +27,39 @@ function parseHexToBigInt(str: string) {
   return str.startsWith('-') ? BigInt(str.slice(1)) * -1n : BigInt(str);
 }
 
-async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promise<Result<U>> {
-  return await promise
+async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promise<U> {
+  return promise
       .then(obj => {
           try {
-              // Parse and transform response data
-              const data = prepareResponseData<U>(obj, orSchema, obj);
-              return { data, error: null } as Result<U>;
+              return prepareResponseData<U>(obj, orSchema, obj);
           } catch (parseError: unknown) {
-              // Handle our custom parsing errors - return the error instance directly
               if (parseError instanceof TonApiParsingError) {
-                  return {
-                      data: null,
-                      error: parseError
-                  } as Result<U>;
+                  throw parseError;
               }
 
-              // Handle other errors (should not happen, but defensive)
               const message = parseError instanceof Error
                   ? `SDK parsing error: ${parseError.message}`
                   : 'SDK parsing error: Unknown error';
 
-              // Create a generic parsing error for unexpected cases
-              return {
-                  data: null,
-                  error: new TonApiParsingError('Cell', message, parseError, obj)
-              } as Result<U>;
+              throw new TonApiParsingError('Unknown', message, parseError, obj);
           }
       })
-      .catch(async response => {
-          // Network error (fetch failed)
-          if (response instanceof Error) {
-              return {
-                  data: null,
-                  error: new TonApiNetworkError(
-                      response.message || 'Network error',
-                      response
-                  )
-              } as Result<U>;
+      .catch((response: any) => {
+          // Re-throw our custom errors without wrapping
+          if (response instanceof TonApiParsingError ||
+              response instanceof TonApiNetworkError ||
+              response instanceof TonApiHttpError ||
+              response instanceof TonApiUnknownError) {
+              throw response;
           }
 
-          // HTTP error with response
+          if (response instanceof Error) {
+              throw new TonApiNetworkError(
+                  response.message || 'Network error',
+                  response
+              );
+          }
+
           if (response && typeof response === 'object' && response.status !== undefined) {
               const status = response.status;
               const url = response.url || '';
@@ -89,17 +81,10 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
                   }
               }
 
-              return {
-                  data: null,
-                  error: new TonApiHttpError(status, message, url, code, response)
-              } as Result<U>;
+              throw new TonApiHttpError(status, message, url, code, response);
           }
 
-          // Unknown error
-          return {
-              data: null,
-              error: new TonApiUnknownError('Unknown error occurred', response)
-          } as Result<U>;
+          throw new TonApiUnknownError('Unknown error occurred', response);
       });
 }
 
