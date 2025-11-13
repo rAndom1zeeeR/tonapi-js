@@ -41,7 +41,9 @@ test('Cell hex in request body test', async () => {
     const cell = Cell.fromBase64(cellBase64);
 
     await sendBlockchainMessage({
-        boc: cell
+        body: {
+            boc: cell
+        }
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(

@@ -1,17 +1,17 @@
 import { SendMode, WalletContractV5R1, internal } from '@ton/ton';
 import { mnemonicNew, mnemonicToPrivateKey } from '@ton/crypto';
-import { initClient } from '@ton-api/client';
+import { TonApiClient } from '@ton-api/client';
 import { ContractAdapter } from '@ton-api/ton-adapter';
 import { test, vi, expect } from 'vitest';
 
-// Initialize TonApi client
-initClient({
+// Create TonApiClient instance
+const tonApiClient = new TonApiClient({
     baseUrl: 'https://tonapi.io'
-    // apiKey: 'YOUR_API_KEY' // Uncomment this line and set your API key
+    // apiKey: 'YOUR_API_KEY' // Uncomment and set your API key
 });
 
-// Create an adapter
-const adapter = new ContractAdapter();
+// Create an adapter with explicit client
+const adapter = new ContractAdapter(tonApiClient);
 
 // Create and use a wallet contract
 async function main() {

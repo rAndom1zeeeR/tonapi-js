@@ -6,6 +6,17 @@ export type Result<T> =
   | { data: T; error: null }
   | { data: null; error: TonApiError };
 
+/**
+ * Conditional return type for Advanced API methods with throwOnError support
+ * @template T - The data type returned on success
+ * @template ThrowOnError - Boolean flag determining if errors should be thrown
+ *
+ * When ThrowOnError is true: returns Promise<T> (throws on error)
+ * When ThrowOnError is false: returns Promise<Result<T>> (returns {data, error})
+ */
+export type MethodResult<T, ThrowOnError extends boolean = false> =
+    ThrowOnError extends true ? Promise<T> : Promise<Result<T>>;
+
 function snakeToCamel(snakeCaseString: string): string {
   return snakeCaseString.replace(/(_\w)/g, (match) => match[1]?.toUpperCase() ?? '');
 }

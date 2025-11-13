@@ -9,33 +9,40 @@ import {
     storeMessage
 } from '@ton/ton';
 import { mnemonicNew, mnemonicToPrivateKey } from '@ton/crypto';
-import { initClient, getAccountSeqno, getAccountPublicKey, emulateMessageToTrace } from '@ton-api/client';
+import { TonApiClient } from '@ton-api/client';
 
+// Create TonApiClient instance
 // if you need to send lots of requests in parallel, make sure you use a tonapi token.
-initClient({
+const tonApiClient = new TonApiClient({
     baseUrl: 'https://tonapi.io',
-    apiKey: 'YOUR_API_KEY'
+    // apiKey: 'YOUR_API_KEY'
 });
 
 // Sender's wallet address
 const senderAddress = Address.parse('UQAQxxpzxmEVU0Lu8U0zNTxBzXIWPvo263TIN1OQM9YvxsnV');
 const recipientAddress = Address.parse('UQDNzlh0XSZdb5_Qrlx5QjyZHVAO74v5oMeVVrtF_5Vt1rIt');
 
-// Get wallet's seqno and public key
-const { data: seqnoData, error: seqnoError } = await getAccountSeqno(senderAddress);
-if (seqnoError) {
-    console.error('Error getting seqno:', seqnoError.message);
-    process.exit(1);
-}
+const seqno = await tonApiClient
+    .getAccountSeqno(senderAddress)
+    .then(seqnoData => seqnoData.seqno)
+    .catch((error: unknown) => {
+        console.error(
+            'Error getting account seqno:',
+            error instanceof Error ? error.message : String(error)
+        );
+        process.exit(1);
+    });
 
-const { data: publicKeyData, error: publicKeyError } = await getAccountPublicKey(senderAddress);
-if (publicKeyError) {
-    console.error('Error getting public key:', publicKeyError.message);
-    process.exit(1);
-}
-
-const seqno = seqnoData.seqno;
-const publicKeyHex = publicKeyData.publicKey;
+const publicKeyHex = await tonApiClient
+    .getAccountPublicKey(senderAddress)
+    .then(publicKeyData => publicKeyData.publicKey)
+    .catch((error: unknown) => {
+        console.error(
+            'Error getting account public key:',
+            error instanceof Error ? error.message : String(error)
+        );
+        process.exit(1);
+    });
 
 // Emulate transaction from wallet_v4 address
 const wallet = WalletContractV4.create({
@@ -85,14 +92,9 @@ const bocExternalMessage = beginCell()
     .endCell();
 
 // Emulate transaction
-const { data: emulateTrace, error: emulateError } = await emulateMessageToTrace(
+const emulateTrace = await tonApiClient.emulateMessageToTrace(
     { boc: bocExternalMessage },
     { ignore_signature_check: true } // Ignore signature for execute message from other account
 );
-
-if (emulateError) {
-    console.error('Error emulating message:', emulateError.message);
-    process.exit(1);
-}
 
 console.log(emulateTrace);

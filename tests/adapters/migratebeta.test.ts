@@ -1,7 +1,7 @@
 import { Address, Contract, ContractProvider, OpenedContract } from '@ton/ton';
 import { mnemonicNew, mnemonicToPrivateKey, KeyPair } from '@ton/crypto';
 import { ContractAdapter } from '@ton-api/ton-adapter';
-import { initClient } from '@ton-api/client';
+import { TonApiClient } from '@ton-api/client';
 import { test, beforeAll, expect } from 'vitest';
 
 class NftItem implements Contract {
@@ -23,14 +23,14 @@ class NftItem implements Contract {
     }
 }
 
-// Initialize the ton API client using flat API
-initClient({
+// Create TonApiClient instance
+const tonApiClient = new TonApiClient({
     baseUrl: 'https://tonapi.io'
     // apiKey: 'your-api-key',
 });
 
-// Create an adapter
-const contractAdapter = new ContractAdapter();
+// Create an adapter with explicit client
+const contractAdapter = new ContractAdapter(tonApiClient);
 let keyPair: KeyPair;
 let contract: OpenedContract<any>;
 
