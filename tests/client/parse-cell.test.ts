@@ -1,10 +1,6 @@
 import { Address, Cell, TupleItem, TupleItemCell } from '@ton/core';
-import {
-    getBlockchainRawAccount,
-    sendBlockchainMessage,
-    execGetMethodForBlockchainAccount
-} from '@ton-api/client';
-import { initTa } from './utils/client';
+import { ta } from './utils/client';
+import { sendBlockchainMessage, initClient } from '@ton-api/client';
 import {
     execGetMethodForBlockchainAccount as execGetMethodForBlockchainAccountMock,
     getBlockchainRawAccount as getBlockchainRawAccountMock
@@ -13,7 +9,7 @@ import { mockFetch } from './utils/mockFetch';
 import { test, expect, afterEach, beforeEach, vi } from 'vitest';
 
 beforeEach(() => {
-    initTa();
+    initClient({ baseUrl: 'https://tonapi.io' });
 });
 
 afterEach(() => {
@@ -25,9 +21,8 @@ test('Cell hex in response test', async () => {
 
     const addressString = '0:009d03ddede8c2620a72f999d03d5888102250a214bf574a29ff64df80162168';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await getBlockchainRawAccount(addressObject);
+    const data = await ta.getBlockchainRawAccount(addressObject);
 
-    expect(error).toBeNull();
     expect(data).toBeDefined();
     expect(data?.code).toBeDefined();
     expect(data?.code).toBeInstanceOf(Cell);
@@ -69,12 +64,11 @@ test('Cell base64 in response test', async () => {
 
     const addressString = 'EQDW6q4sRqQwNCmW4qwUpeFSU1Xhd6l3xwJ6jjknBPzxKNtT';
     const addressObject = Address.parse(addressString);
-    const { data, error } = await execGetMethodForBlockchainAccount(
+    const data = await ta.execGetMethodForBlockchainAccount(
         addressObject,
         'royalty_params'
     );
 
-    expect(error).toBeNull();
     expect(data).toBeDefined();
     expect(data?.success).toBeDefined();
 

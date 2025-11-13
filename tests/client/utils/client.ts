@@ -1,6 +1,15 @@
-import { initClient } from '@ton-api/client';
+import { initClient, TonApiClient } from '@ton-api/client';
 
 const baseUrl = 'https://tonapi.io';
+
+export const taWithApiKey = new TonApiClient({
+    baseUrl,
+    apiKey: 'TEST_API_KEY'
+});
+
+export const ta = new TonApiClient({
+    baseUrl
+});
 
 // Initialize default client (without API key)
 export function initTa() {
@@ -14,19 +23,3 @@ export function initTaWithApiKey() {
         apiKey: 'TEST_API_KEY'
     });
 }
-
-// Switch to client without API key
-export function useTa() {
-    initClient({ baseUrl });
-}
-
-// Switch to client with API key
-export function useTaWithApiKey() {
-    initClient({
-        baseUrl,
-        apiKey: 'TEST_API_KEY'
-    });
-}
-
-// Initialize default client on module load
-initTa();

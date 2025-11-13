@@ -25,8 +25,9 @@ const pathParams = originPathParams.map(
 
 const isFetchTemplate = config.httpClientType === HTTP_CLIENT.FETCH;
 
+// Use consistent parameter name for both class methods and global functions
 const requestConfigParam = {
-    name: specificArgNameResolver.resolve(RESERVED_REQ_PARAMS_ARG_NAMES),
+    name: 'params',
     optional: true,
     type: "RequestParams",
     defaultValue: "{}",
@@ -42,10 +43,13 @@ const rawWrapperArgs = _.compact([
 ]);
 
 // Sort by optionality
-const wrapperArgs = _
-    .sortBy(rawWrapperArgs, [o => o.optional])
+const sortedWrapperArgs = _.sortBy(rawWrapperArgs, [o => o.optional]);
+const wrapperArgs = sortedWrapperArgs
     .map(argToTmpl)
     .join(', ');
+
+// For passing arguments to class method in correct order (use sorted order)
+const passedArgs = sortedWrapperArgs.map(arg => arg.name).join(', ');
 
 // RequestParams["type"]
 const requestContentKind = {
@@ -105,9 +109,19 @@ const queryImplodeTmpl = queryImplodeParams.length === 0 ? null : JSON.stringify
 <%~ routeDocs.lines %>
 
  */
-<% if (isFlat) { %>export const <% } %><%~ route.routeName.usage %><%~ route.namespace && !isFlat ? ': ' : ' = ' %> (<%~ wrapperArgs %>)<%~ config.toJS ? `: ${describeReturnType()}` : "" %> => {
+<% if (isFlat) { %>
+export const <%~ route.routeName.usage %> = async (<%~ wrapperArgs %>)<%~ config.toJS ? `: ${describeReturnType()}` : "" %> => {
+    try {
+        const result = await getDefaultClient().<%~ route.routeName.usage %>(<%~ passedArgs %>);
+        return { data: result, error: null };
+    } catch (error) {
+        return { data: null, error: error as TonApiError };
+    }
+};
+<% } else { %>
+async <%~ route.routeName.usage %>(<%~ wrapperArgs %>)<%~ config.toJS ? `: Promise<${type}>` : "" %> {
     <%~ reducedPathParams %>
-    const req = <%~ isFlat ? 'getHttpClient().request' : config.singleHttpClient ? 'this.http.request' : 'this.request' %><<%~ type %>, <%~ errorType %>>({
+    const req = this.http.request<<%~ type %>, <%~ errorType %>>({
         path: `<%~ path %>`,
         method: '<%~ _.upperCase(method) %>',
         <%~ queryTmpl ? `query: ${queryTmplValue},` : '' %>
@@ -120,5 +134,6 @@ const queryImplodeTmpl = queryImplodeParams.length === 0 ? null : JSON.stringify
     });
 
     return prepareResponse<<%~ type %>>(req<%~ schemaTmpl %>);
-}<%~ route.namespace && !isFlat ? ',' : '' %>
+}
+<% } %>
 
