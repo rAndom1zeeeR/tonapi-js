@@ -268,3 +268,106 @@ test('Result type usage patterns', () => {
     type ErrorBranch = { data: null; error: TonApiError };
     expectTypeOf<Result<Account>>().toEqualTypeOf<SuccessBranch | ErrorBranch>();
 });
+
+test('TonApiPromise - .then() preserves typed .catch()', () => {
+    const client = new TonApiClient({ baseUrl: 'https://tonapi.io' });
+    const address = Address.parse('EQApwowlR6X54bXoso6orKCzCNm9ily8pAFy5vTwmsQ2Wqin');
+
+    // Test 1: After .then(), error should still be TonApiError (not unknown!)
+    const chainTest1 = client.status().then(data => {
+        return data.restOnline;
+    });
+
+    chainTest1.catch(error => {
+        type ErrorType = typeof error;
+        // ✅ Should be TonApiError, not unknown!
+        expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+    });
+
+    // Test 2: Multiple .then() chains preserve typing
+    const chainTest2 = client
+        .getAccount(address)
+        .then(account => account.balance)
+        .then(balance => balance.toString());
+
+    chainTest2.catch(error => {
+        type ErrorType = typeof error;
+        // ✅ Should be TonApiError
+        expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+    });
+
+    // Test 3: .then() with onrejected also works
+    const chainTest3 = client.status().then(
+        data => data.restOnline,
+        error => {
+            // error in onrejected should be TonApiError
+            type ErrorType = typeof error;
+            expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+            return false;
+        }
+    );
+
+    chainTest3.catch(error => {
+        type ErrorType = typeof error;
+        expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+    });
+});
+
+test('TonApiPromise - .catch().then() preserves typing', () => {
+    const client = new TonApiClient({ baseUrl: 'https://tonapi.io' });
+
+    const chainTest = client
+        .status()
+        .catch(error => {
+            // error is TonApiError ✅
+            type ErrorType = typeof error;
+            expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+            return null;
+        })
+        .then(result => {
+            // result is ServiceStatus | null
+            type ResultType = typeof result;
+            expectTypeOf<ResultType>().toEqualTypeOf<ServiceStatus | null>();
+            return result;
+        });
+
+    // Subsequent .catch() should still have typed error
+    chainTest.catch(error => {
+        type ErrorType = typeof error;
+        expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+    });
+});
+
+test('TonApiPromise - .finally() preserves typing', () => {
+    const client = new TonApiClient({ baseUrl: 'https://tonapi.io' });
+
+    const chainTest = client.status().finally(() => {
+        console.log('done');
+    });
+
+    // After .finally(), error should still be TonApiError
+    chainTest.catch(error => {
+        type ErrorType = typeof error;
+        expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+    });
+});
+
+test('TonApiPromise - Complex chains preserve typing', () => {
+    const client = new TonApiClient({ baseUrl: 'https://tonapi.io' });
+    const address = Address.parse('EQApwowlR6X54bXoso6orKCzCNm9ily8pAFy5vTwmsQ2Wqin');
+
+    const complexChain = client
+        .getAccount(address)
+        .then(account => account.balance)
+        .then(balance => balance.toString())
+        .finally(() => {
+            console.log('fetched balance');
+        })
+        .then(str => str.length);
+
+    // After all these chains, error should still be TonApiError
+    complexChain.catch(error => {
+        type ErrorType = typeof error;
+        expectTypeOf<ErrorType>().toEqualTypeOf<TonApiError>();
+    });
+});

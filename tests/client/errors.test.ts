@@ -3,15 +3,17 @@ import {
     status,
     getAccount,
     getAccounts,
+    sendBlockchainMessage,
     TonApiParsingError,
     TonApiHttpError,
     TonApiNetworkError,
     TonApiUnknownError,
+    TonApiValidationError,
     TonApiError,
     TonApiClient
 } from '@ton-api/client';
-import { Address } from '@ton/core';
-import { vi, test, expect, beforeEach, describe, afterEach } from 'vitest';
+import { Address, Cell } from '@ton/core';
+import { vi, test, expect, beforeEach, describe, afterEach, expectTypeOf } from 'vitest';
 import { mockFetch } from './utils/mockFetch';
 
 beforeEach(() => {
@@ -844,5 +846,212 @@ describe('Advanced API - Global methods (returns {data, error})', () => {
             // This line won't be reached in this test
             fail('Should have returned early on error');
         });
+    });
+});
+
+describe('TonApiValidationError - Client-side validation', () => {
+    beforeEach(() => {
+        vi.spyOn(global, 'fetch').mockResolvedValue(
+            new Response(JSON.stringify({ balance: '100', address: 'test', status: 'active' }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            })
+        );
+    });
+
+    test('Advanced API - Invalid address string returns TonApiValidationError', async () => {
+        const invalidAddress = 'invalid-address-format';
+
+        const result = await getAccount({
+            path: { accountId: invalidAddress }
+        });
+
+        // Should return error, not throw
+        expect(result.error).toBeDefined();
+        expect(result.data).toBeNull();
+
+        if (result.error) {
+            // Check it's a validation error
+            expect(result.error).toBeInstanceOf(TonApiValidationError);
+            expect(result.error.type).toBe('validation_error');
+
+            if (result.error instanceof TonApiValidationError) {
+                expect(result.error.validationType).toBe('Address');
+                expect(result.error.invalidInput).toBe(invalidAddress);
+                expect(result.error.message).toContain('Address');
+            }
+        }
+    });
+
+    test('Advanced API - Invalid address with throwOnError: true throws', async () => {
+        const invalidAddress = 'invalid-address-format';
+
+        try {
+            await getAccount({
+                path: { accountId: invalidAddress },
+                throwOnError: true
+            });
+            expect.fail('Should have thrown TonApiValidationError');
+        } catch (error) {
+            expect(error).toBeInstanceOf(TonApiValidationError);
+
+            if (error instanceof TonApiValidationError) {
+                expect(error.validationType).toBe('Address');
+                expect(error.invalidInput).toBe(invalidAddress);
+            }
+        }
+    });
+
+    test('Instance API - Invalid address throws TonApiValidationError', async () => {
+        const client = new TonApiClient({ baseUrl: 'https://tonapi.io' });
+        const invalidAddress = 'invalid-address-format';
+
+        try {
+            await client.getAccount(invalidAddress);
+            expect.fail('Should have thrown TonApiValidationError');
+        } catch (error) {
+            expect(error).toBeInstanceOf(TonApiValidationError);
+
+            if (error instanceof TonApiValidationError) {
+                expect(error.validationType).toBe('Address');
+                expect(error.invalidInput).toBe(invalidAddress);
+                expect(error.message).toContain('Validation error [Address]');
+            }
+        }
+    });
+
+    test('Valid address string works correctly', async () => {
+        const validAddress = 'EQApwowlR6X54bXoso6orKCzCNm9ily8pAFy5vTwmsQ2Wqin';
+
+        // Should not throw validation error (but might have parsing error from mock response)
+        const result = await getAccount({
+            path: { accountId: validAddress }
+        });
+
+        // If there's an error, it should NOT be validation error
+        if (result.error) {
+            expect(result.error).not.toBeInstanceOf(TonApiValidationError);
+        }
+    });
+
+    test('TonApiValidationError is included in TonApiError union', () => {
+        const error = new TonApiValidationError('Address', 'test error', 'invalid');
+
+        // Should be assignable to TonApiError
+        const tonApiError: TonApiError = error;
+
+        expect(tonApiError.type).toBe('validation_error');
+    });
+
+    test('Advanced API - Invalid cell string returns TonApiValidationError', async () => {
+        const invalidCell = 'invalid-cell-string';
+
+        const result = await sendBlockchainMessage({
+            body: { boc: invalidCell as any }
+        });
+
+        // Should return error, not throw
+        expect(result.error).toBeDefined();
+        expect(result.data).toBeNull();
+
+        if (result.error) {
+            expect(result.error).toBeInstanceOf(TonApiValidationError);
+            expect(result.error.type).toBe('validation_error');
+
+            if (result.error instanceof TonApiValidationError) {
+                expect(result.error.validationType).toBe('Cell');
+                expect(result.error.invalidInput).toBe(invalidCell);
+                expect(result.error.message).toContain('Cell');
+            }
+        }
+    });
+
+    test('Advanced API - Invalid cell with throwOnError: true throws', async () => {
+        const invalidCell = 'not-a-valid-cell';
+
+        try {
+            await sendBlockchainMessage({
+                body: { boc: invalidCell as any },
+                throwOnError: true
+            });
+            expect.fail('Should have thrown TonApiValidationError');
+        } catch (error) {
+            expect(error).toBeInstanceOf(TonApiValidationError);
+
+            if (error instanceof TonApiValidationError) {
+                expect(error.validationType).toBe('Cell');
+                expect(error.invalidInput).toBe(invalidCell);
+            }
+        }
+    });
+
+    test('Instance API - Invalid cell throws TonApiValidationError', async () => {
+        const client = new TonApiClient({ baseUrl: 'https://tonapi.io' });
+        const invalidCell = 'invalid-cell';
+
+        try {
+            await client.sendBlockchainMessage({ boc: invalidCell as any });
+            expect.fail('Should have thrown TonApiValidationError');
+        } catch (error) {
+            expect(error).toBeInstanceOf(TonApiValidationError);
+
+            if (error instanceof TonApiValidationError) {
+                expect(error.validationType).toBe('Cell');
+                expect(error.invalidInput).toBe(invalidCell);
+                expect(error.message).toContain('Validation error [Cell]');
+            }
+        }
+    });
+
+    test('Valid cell hex string works correctly', async () => {
+        // Valid empty cell in hex format
+        const validCellHex = 'b5ee9c724101010100020000004cacb9cd';
+
+        const fetchSpy = vi.spyOn(global, 'fetch')
+            .mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+        const result = await sendBlockchainMessage({
+            body: { boc: validCellHex as any }
+        });
+
+        // Should not have validation error
+        if (result.error) {
+            expect(result.error).not.toBeInstanceOf(TonApiValidationError);
+        }
+
+        // Verify the cell hex was sent correctly (API expects hex for 'boc' field)
+        expect(fetchSpy).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({ boc: validCellHex })
+            })
+        );
+    });
+
+    test('Valid cell base64 string is converted to hex', async () => {
+        // Valid empty cell in base64 format
+        const validCellBase64 = 'te6cckEBAQEAAgAAAEysuc0=';
+
+        const fetchSpy = vi.spyOn(global, 'fetch')
+            .mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+        const result = await sendBlockchainMessage({
+            body: { boc: validCellBase64 as any }
+        });
+
+        // Should not have validation error
+        if (result.error) {
+            expect(result.error).not.toBeInstanceOf(TonApiValidationError);
+        }
+
+        // Verify the cell was converted from base64 to hex format
+        expect(fetchSpy).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({ boc: 'b5ee9c724101010100020000004cacb9cd' })
+            })
+        );
     });
 });

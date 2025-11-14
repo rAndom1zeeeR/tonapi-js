@@ -3681,7 +3681,7 @@ class HttpClient {
         const headers = {
             ...(baseApiParams.headers ?? {}),
             ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            'x-tonapi-client': `tonapi-js@0.5.0-alpha.4`
+            'x-tonapi-client': `tonapi-js@0.5.0-alpha.5`
         };
 
         const preparedApiConfig = {
@@ -6477,6 +6477,39 @@ export class TonApiParsingError extends TonApiErrorAbstract {
 }
 
 /**
+ * Validation error for client-side input validation
+ * Thrown when user provides invalid input (e.g., invalid address string, invalid Cell string)
+ * This happens before making any network request
+ *
+ * @example
+ * ```typescript
+ * if (error instanceof TonApiValidationError) {
+ *   console.log('Validation type:', error.validationType); // 'Address' or 'Cell'
+ *   console.log('Error message:', error.message);
+ *   console.log('Invalid input:', error.invalidInput);
+ * }
+ * ```
+ */
+export class TonApiValidationError extends TonApiErrorAbstract {
+    readonly type = 'validation_error' as const;
+    readonly validationType: 'Address' | 'Cell';
+    readonly invalidInput: string;
+
+    constructor(
+        validationType: 'Address' | 'Cell',
+        message: string,
+        invalidInput: string,
+        cause?: unknown
+    ) {
+        const formattedMessage = `Validation error [${validationType}]: ${message}`;
+        super(formattedMessage, cause);
+        this.name = 'TonApiValidationError';
+        this.validationType = validationType;
+        this.invalidInput = invalidInput;
+    }
+}
+
+/**
  * Unknown error type
  * Thrown when an error occurs that doesn't fit other categories
  *
@@ -6514,6 +6547,8 @@ export class TonApiUnknownError extends TonApiErrorAbstract {
  *     console.log(`Network error: ${error.message}`);
  *   } else if (error instanceof TonApiParsingError) {
  *     console.log(`Parsing ${error.parsingType} failed: ${error.message}`);
+ *   } else if (error instanceof TonApiValidationError) {
+ *     console.log(`Validation ${error.validationType} failed: ${error.message}`);
  *   } else if (error instanceof TonApiUnknownError) {
  *     console.log(`Unknown error: ${error.message}`);
  *   }
@@ -6529,6 +6564,9 @@ export class TonApiUnknownError extends TonApiErrorAbstract {
  *     case 'parsing_error':
  *       console.log(error.parsingType);
  *       break;
+ *     case 'validation_error':
+ *       console.log(error.validationType, error.invalidInput);
+ *       break;
  *     case 'unknown_error':
  *       console.log(error.originalCause);
  *       break;
@@ -6540,18 +6578,27 @@ export type TonApiError =
     | TonApiHttpError
     | TonApiNetworkError
     | TonApiParsingError
+    | TonApiValidationError
     | TonApiUnknownError;
 
 type ComponentRef = keyof typeof components;
 
 /**
- * Custom Promise interface with typed catch method
+ * Custom Promise interface with typed error handling
  * This allows TypeScript to infer the correct error type in .catch() handlers
+ * and preserves error typing through .then() and .finally() chains
  */
 export interface TonApiPromise<T, E = TonApiError> extends Promise<T> {
+    then<TResult1 = T, TResult2 = never>(
+        onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+        onrejected?: ((reason: E) => TResult2 | PromiseLike<TResult2>) | null | undefined
+    ): TonApiPromise<TResult1 | TResult2, E>;
+
     catch<TResult = never>(
         onrejected?: ((reason: E) => TResult | PromiseLike<TResult>) | null | undefined
-    ): Promise<T | TResult>;
+    ): TonApiPromise<T | TResult, E>;
+
+    finally(onfinally?: (() => void) | null | undefined): TonApiPromise<T, E>;
 }
 
 export type Result<T> = { data: T; error: null } | { data: null; error: TonApiError };
@@ -6603,8 +6650,45 @@ function addressToString(value: Address | string | undefined): string | undefine
     if (value === undefined) {
         return undefined;
     }
-    const addr = typeof value === 'string' ? Address.parse(value) : value;
-    return addr.toRawString();
+
+    if (typeof value === 'string') {
+        // Validate format without parsing
+        if (!Address.isFriendly(value) && !Address.isRaw(value)) {
+            throw new TonApiValidationError('Address', `Invalid address format: ${value}`, value);
+        }
+        // Return string as-is, let the API handle it
+        return value;
+    }
+
+    return value.toRawString();
+}
+
+function cellToString(
+    value: Cell | string | undefined,
+    format: 'hex' | 'base64'
+): string | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (typeof value === 'string') {
+        // Parse and convert to expected format
+        let cell: Cell;
+        try {
+            cell = Cell.fromHex(value);
+        } catch {
+            try {
+                cell = Cell.fromBase64(value);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                throw new TonApiValidationError('Cell', `Invalid cell format: ${msg}`, value);
+            }
+        }
+        // Convert to expected format
+        return format === 'base64' ? cell.toBoc().toString('base64') : cell.toBoc().toString('hex');
+    }
+
+    return format === 'base64' ? value.toBoc().toString('base64') : value.toBoc().toString('hex');
 }
 
 /**
@@ -6640,6 +6724,7 @@ function prepareResponse<U, E = TonApiError>(
                 response instanceof TonApiParsingError ||
                 response instanceof TonApiNetworkError ||
                 response instanceof TonApiHttpError ||
+                response instanceof TonApiValidationError ||
                 response instanceof TonApiUnknownError
             ) {
                 throw response;
@@ -6837,11 +6922,11 @@ function prepareRequestData(data: any, orSchema?: any): any {
             }
 
             if (schema.format === 'cell') {
-                return (data as Cell).toBoc().toString('hex');
+                return cellToString(data as Cell | string, 'hex');
             }
 
             if (schema.format === 'cell-base64') {
-                return (data as Cell).toBoc().toString('base64');
+                return cellToString(data as Cell | string, 'base64');
             }
 
             if (schema['x-js-format'] === 'bigint') {
