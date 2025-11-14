@@ -3,13 +3,21 @@
 type ComponentRef = keyof typeof components;
 
 /**
- * Custom Promise interface with typed catch method
+ * Custom Promise interface with typed error handling
  * This allows TypeScript to infer the correct error type in .catch() handlers
+ * and preserves error typing through .then() and .finally() chains
  */
 export interface TonApiPromise<T, E = TonApiError> extends Promise<T> {
+    then<TResult1 = T, TResult2 = never>(
+        onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+        onrejected?: ((reason: E) => TResult2 | PromiseLike<TResult2>) | null | undefined
+    ): TonApiPromise<TResult1 | TResult2, E>;
+
     catch<TResult = never>(
         onrejected?: ((reason: E) => TResult | PromiseLike<TResult>) | null | undefined
-    ): Promise<T | TResult>;
+    ): TonApiPromise<T | TResult, E>;
+
+    finally(onfinally?: (() => void) | null | undefined): TonApiPromise<T, E>;
 }
 
 export type Result<T> =
@@ -57,12 +65,48 @@ function parseHexToBigInt(str: string) {
   return str.startsWith('-') ? BigInt(str.slice(1)) * -1n : BigInt(str);
 }
 
+
+
 function addressToString(value: Address | string | undefined): string | undefined {
   if (value === undefined) {
     return undefined;
   }
-  const addr = typeof value === 'string' ? Address.parse(value) : value;
-  return addr.toRawString();
+
+  if (typeof value === 'string') {
+    // Validate format without parsing
+    if (!Address.isFriendly(value) && !Address.isRaw(value)) {
+      throw new TonApiValidationError('Address', `Invalid address format: ${value}`, value);
+    }
+    // Return string as-is, let the API handle it
+    return value;
+  }
+
+  return value.toRawString();
+}
+
+function cellToString(value: Cell | string | undefined, format: 'hex' | 'base64'): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    // Parse and convert to expected format
+    let cell: Cell;
+    try {
+      cell = Cell.fromHex(value);
+    } catch {
+      try {
+        cell = Cell.fromBase64(value);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new TonApiValidationError('Cell', `Invalid cell format: ${msg}`, value);
+      }
+    }
+    // Convert to expected format
+    return format === 'base64' ? cell.toBoc().toString('base64') : cell.toBoc().toString('hex');
+  }
+
+  return format === 'base64' ? value.toBoc().toString('base64') : value.toBoc().toString('hex');
 }
 
 /**
@@ -93,6 +137,7 @@ function prepareResponse<U, E = TonApiError>(promise: Promise<any>, orSchema?: a
           if (response instanceof TonApiParsingError ||
               response instanceof TonApiNetworkError ||
               response instanceof TonApiHttpError ||
+              response instanceof TonApiValidationError ||
               response instanceof TonApiUnknownError) {
               throw response;
           }
@@ -303,11 +348,11 @@ function prepareRequestData(data: any, orSchema?: any): any {
           }
 
           if (schema.format === 'cell') {
-              return (data as Cell).toBoc().toString('hex');
+              return cellToString(data as Cell | string, 'hex');
           }
 
           if (schema.format === 'cell-base64') {
-              return (data as Cell).toBoc().toString('base64');
+              return cellToString(data as Cell | string, 'base64');
           }
 
           if (schema['x-js-format'] === 'bigint') {
