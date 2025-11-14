@@ -1521,6 +1521,20 @@ export interface JettonPreview {
     customPayloadApiUri?: string;
     /** @format int32 */
     score: number;
+    scaledUi?: ScaledUI;
+}
+
+export interface ScaledUI {
+    /**
+     * @format bigint
+     * @example "597968399"
+     */
+    numerator: bigint;
+    /**
+     * @format bigint
+     * @example "597968399"
+     */
+    denominator: bigint;
 }
 
 export interface JettonBalance {
@@ -1529,11 +1543,6 @@ export interface JettonBalance {
      * @example "597968399"
      */
     balance: bigint;
-    /**
-     * @format bigint
-     * @example "597968399"
-     */
-    scaledUiBalance?: bigint;
     price?: TokenRates;
     walletAddress: AccountAddress;
     jetton: JettonPreview;
@@ -1990,11 +1999,6 @@ export interface JettonTransferAction {
      * @example "1000000000"
      */
     amount: bigint;
-    /**
-     * @format bigint
-     * @example "1100000000"
-     */
-    scaledUiAmount?: bigint;
     /**
      * @example "Hi! This is your salary.
      * From accounting with love."
@@ -2668,6 +2672,7 @@ export interface JettonInfo {
      * @example 2000
      */
     holdersCount: number;
+    scaledUi?: ScaledUI;
 }
 
 export interface JettonHolders {
@@ -3681,7 +3686,7 @@ class HttpClient {
         const headers = {
             ...(baseApiParams.headers ?? {}),
             ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            'x-tonapi-client': `tonapi-js@0.5.0-alpha.5`
+            'x-tonapi-client': `tonapi-js@0.5.0-alpha.6`
         };
 
         const preparedApiConfig = {
@@ -5064,7 +5069,16 @@ const components = {
             image: { type: 'string' },
             verification: { $ref: '#/components/schemas/JettonVerificationType' },
             custom_payload_api_uri: { type: 'string' },
-            score: { type: 'integer', format: 'int32' }
+            score: { type: 'integer', format: 'int32' },
+            scaled_ui: { $ref: '#/components/schemas/ScaledUI' }
+        }
+    },
+    '#/components/schemas/ScaledUI': {
+        type: 'object',
+        required: ['numerator', 'denominator'],
+        properties: {
+            numerator: { type: 'string', 'x-js-format': 'bigint' },
+            denominator: { type: 'string', 'x-js-format': 'bigint' }
         }
     },
     '#/components/schemas/JettonBalance': {
@@ -5072,7 +5086,6 @@ const components = {
         required: ['balance', 'wallet_address', 'jetton'],
         properties: {
             balance: { type: 'string', 'x-js-format': 'bigint' },
-            scaled_ui_balance: { type: 'string', 'x-js-format': 'bigint' },
             price: { $ref: '#/components/schemas/TokenRates' },
             wallet_address: { $ref: '#/components/schemas/AccountAddress' },
             jetton: { $ref: '#/components/schemas/JettonPreview' },
@@ -5470,7 +5483,6 @@ const components = {
             senders_wallet: { type: 'string', format: 'address' },
             recipients_wallet: { type: 'string', format: 'address' },
             amount: { type: 'string', 'x-js-format': 'bigint' },
-            scaled_ui_amount: { type: 'string', 'x-js-format': 'bigint' },
             comment: { type: 'string' },
             encrypted_comment: { $ref: '#/components/schemas/EncryptedComment' },
             refund: { $ref: '#/components/schemas/Refund' },
@@ -6029,7 +6041,8 @@ const components = {
             metadata: { $ref: '#/components/schemas/JettonMetadata' },
             preview: { type: 'string' },
             verification: { $ref: '#/components/schemas/JettonVerificationType' },
-            holders_count: { type: 'integer', format: 'int32' }
+            holders_count: { type: 'integer', format: 'int32' },
+            scaled_ui: { $ref: '#/components/schemas/ScaledUI' }
         }
     },
     '#/components/schemas/JettonHolders': {
