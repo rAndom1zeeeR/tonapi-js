@@ -1,5 +1,15 @@
 import { initTa, ta } from './utils/client';
-import { status, getAccount, getAccounts, execGetMethodForBlockchainAccount, TonApiParsingError, TonApiHttpError, TonApiNetworkError, TonApiUnknownError, TonApiClient } from '@ton-api/client';
+import {
+    status,
+    getAccount,
+    getAccounts,
+    TonApiParsingError,
+    TonApiHttpError,
+    TonApiNetworkError,
+    TonApiUnknownError,
+    TonApiError,
+    TonApiClient
+} from '@ton-api/client';
 import { Address } from '@ton/core';
 import { vi, test, expect, beforeEach, describe, afterEach } from 'vitest';
 import { mockFetch } from './utils/mockFetch';
@@ -102,7 +112,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
         });
 
         test('should throw with string message', async () => {
-            vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse('Simple error message', 500));
+            vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+                createJsonResponse('Simple error message', 500)
+            );
 
             const error = await expectThrowingError(() => ta.status());
             assertIsHttpError(error);
@@ -245,7 +257,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -260,7 +274,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -274,7 +290,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -296,7 +314,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                 });
 
                 const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
-                const error = await expectThrowingError(() => ta.execGetMethodForBlockchainAccount(address, 'get_data'));
+                const error = await expectThrowingError(() =>
+                    ta.execGetMethodForBlockchainAccount(address, 'get_data')
+                );
 
                 assertIsParsingError(error);
                 expect(error.parsingType).toBe('Cell');
@@ -315,7 +335,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                 });
 
                 const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
-                const error = await expectThrowingError(() => ta.execGetMethodForBlockchainAccount(address, 'get_data'));
+                const error = await expectThrowingError(() =>
+                    ta.execGetMethodForBlockchainAccount(address, 'get_data')
+                );
 
                 assertIsParsingError(error);
                 expect(error.parsingType).toBe('Cell');
@@ -334,7 +356,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                 });
 
                 const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
-                const error = await expectThrowingError(() => ta.execGetMethodForBlockchainAccount(address, 'get_data'));
+                const error = await expectThrowingError(() =>
+                    ta.execGetMethodForBlockchainAccount(address, 'get_data')
+                );
 
                 assertIsParsingError(error);
                 expect(error.parsingType).toBe('Cell');
@@ -353,7 +377,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                 });
 
                 const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
-                const error = await expectThrowingError(() => ta.execGetMethodForBlockchainAccount(address, 'get_data'));
+                const error = await expectThrowingError(() =>
+                    ta.execGetMethodForBlockchainAccount(address, 'get_data')
+                );
 
                 assertIsParsingError(error);
                 expect(error.parsingType).toBe('Cell');
@@ -368,7 +394,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -382,7 +410,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -397,7 +427,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const result = await ta.getAccount(validAddress);
 
                 // Empty string converts to 0n without error
@@ -420,7 +452,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                 });
 
                 const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
-                const error = await expectThrowingError(() => ta.execGetMethodForBlockchainAccount(address, 'get_data'));
+                const error = await expectThrowingError(() =>
+                    ta.execGetMethodForBlockchainAccount(address, 'get_data')
+                );
 
                 assertIsParsingError(error);
                 expect(error.parsingType).toBe('TupleItem');
@@ -444,7 +478,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                 });
 
                 const address = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
-                const error = await expectThrowingError(() => ta.execGetMethodForBlockchainAccount(address, 'get_data'));
+                const error = await expectThrowingError(() =>
+                    ta.execGetMethodForBlockchainAccount(address, 'get_data')
+                );
 
                 assertIsParsingError(error);
                 expect(error.parsingType).toBe('TupleItem');
@@ -459,7 +495,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -473,7 +511,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
 
                 expect(typeof error.message).toBe('string');
                 expect(error.type).toBe('parsing_error');
-                expect(['Address', 'Cell', 'BigInt', 'TupleItem', 'Unknown']).toContain(error.parsingType);
+                expect(['Address', 'Cell', 'BigInt', 'TupleItem', 'Unknown']).toContain(
+                    error.parsingType
+                );
             });
 
             test('parsing_error should have correct structure', async () => {
@@ -483,7 +523,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -505,7 +547,9 @@ describe('Instance API - Primary approach (throws errors)', () => {
                     status: 'active'
                 });
 
-                const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+                const validAddress = Address.parse(
+                    'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
+                );
                 const error = await expectThrowingError(() => ta.getAccount(validAddress));
 
                 assertIsParsingError(error);
@@ -530,6 +574,7 @@ describe('Advanced API - Global methods (returns {data, error})', () => {
         const fetchSpy = mockFetch(mockData);
 
         const { data, error } = await status();
+
         expect(error).toBeNull();
         expect(data).toBeDefined();
         // Response is converted to camelCase
@@ -706,22 +751,20 @@ describe('Advanced API - Global methods (returns {data, error})', () => {
 
         test('should throw specific error type when throwOnError is true', async () => {
             const mockError = { error: 'Not found' };
-            vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse(mockError, 404));
+            vi.spyOn(global, 'fetch').mockResolvedValue(createJsonResponse(mockError, 404));
 
             const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
 
-            try {
-                await getAccount({
-                    path: { accountId: validAddress },
-                    throwOnError: true
-                });
-                // Should not reach here
-                expect(true).toBe(false);
-            } catch (error) {
-                assertIsHttpError(error);
-                expect(error.status).toBe(404);
-                expect(error.message).toContain('Not found');
-            }
+            // Catch and verify error details
+            const error = await getAccount({
+                path: { accountId: validAddress },
+                throwOnError: true
+            }).catch(e => e);
+
+            // Should throw TonApiHttpError with correct properties
+            assertIsHttpError(error);
+            expect(error.status).toBe(404);
+            expect(error.message).toBe('HTTP 404: Not found');
         });
 
         test('throwOnError false should still return Result type', async () => {
@@ -735,6 +778,71 @@ describe('Advanced API - Global methods (returns {data, error})', () => {
             expect(result).toHaveProperty('error');
             expect(result.error).toBeNull();
             expect(result.data).toBeDefined();
+        });
+
+        test('should demonstrate type narrowing with if (error) check', async () => {
+            const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+
+            // Test success case - type narrows to success branch
+            const mockData = { balance: 100n, status: 'active' };
+            mockFetch(mockData);
+
+            const successResult = await getAccount({
+                path: { accountId: validAddress }
+            });
+
+            if (successResult.error) {
+                // Error branch - would have TonApiError and null data
+                fail('Should not have error in success case');
+            } else {
+                // Success branch - TypeScript knows data is Account, error is null
+                expect(successResult.data).toBeDefined();
+                expect(successResult.data.balance).toBe(100n);
+                expect(successResult.data.status).toBe('active');
+                expect(successResult.error).toBeNull();
+            }
+
+            // Test error case - type narrows to error branch
+            const mockError = { error: 'Account not found' };
+            vi.spyOn(global, 'fetch').mockResolvedValueOnce(createJsonResponse(mockError, 404));
+
+            const errorResult = await getAccount({
+                path: { accountId: validAddress }
+            });
+
+            if (errorResult.error) {
+                // Error branch - TypeScript knows error is TonApiError, data is null
+                expect(errorResult.error).toBeInstanceOf(TonApiHttpError);
+                expect(errorResult.error.message).toContain('Account not found');
+                expect(errorResult.data).toBeNull();
+            } else {
+                // Success branch
+                fail('Should have error in error case');
+            }
+        });
+
+        test('should support error recovery pattern with default values', async () => {
+            const validAddress = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y');
+            const mockError = { error: 'Account not found' };
+            mockFetch(mockError, 404);
+
+            const { data, error } = await getAccount({
+                path: { accountId: validAddress }
+            });
+
+            // Pattern 1: Using ternary for default value
+            const balance = error ? 0n : data.balance;
+            expect(balance).toBe(0n);
+
+            // Pattern 2: Early return pattern
+            if (error) {
+                expect(error.message).toContain('Account not found');
+                expect(data).toBeNull();
+                return; // Early return in real code
+            }
+
+            // This line won't be reached in this test
+            fail('Should have returned early on error');
         });
     });
 });
