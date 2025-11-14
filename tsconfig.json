@@ -5,6 +5,8 @@
     "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "target": "ESNext",
+    "lib": ["ESNext", "dom"],
     "paths": {
       "@ton-api/client": ["./packages/client/src/client.ts"],
       "@ton-api/ton-adapter": ["./packages/ton-adapter/src/index.ts"]

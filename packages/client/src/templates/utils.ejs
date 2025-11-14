@@ -2,6 +2,16 @@
 
 type ComponentRef = keyof typeof components;
 
+/**
+ * Custom Promise interface with typed catch method
+ * This allows TypeScript to infer the correct error type in .catch() handlers
+ */
+export interface TonApiPromise<T, E = TonApiError> extends Promise<T> {
+    catch<TResult = never>(
+        onrejected?: ((reason: E) => TResult | PromiseLike<TResult>) | null | undefined
+    ): Promise<T | TResult>;
+}
+
 export type Result<T> =
   | { data: T; error: null }
   | { data: null; error: TonApiError };
@@ -16,6 +26,15 @@ export type Result<T> =
  */
 export type MethodResult<T, ThrowOnError extends boolean = false> =
     ThrowOnError extends true ? Promise<T> : Promise<Result<T>>;
+
+/**
+ * Sync version of MethodResult for use with async functions
+ * (async functions automatically wrap return type in Promise)
+ * When ThrowOnError is true, returns T but the Promise will reject with TonApiError
+ * When ThrowOnError is false, returns Result<T>
+ */
+type MethodResultSync<T, ThrowOnError extends boolean = false> =
+    ThrowOnError extends true ? T : Result<T>;
 
 function snakeToCamel(snakeCaseString: string): string {
   return snakeCaseString.replace(/(_\w)/g, (match) => match[1]?.toUpperCase() ?? '');
@@ -38,7 +57,21 @@ function parseHexToBigInt(str: string) {
   return str.startsWith('-') ? BigInt(str.slice(1)) * -1n : BigInt(str);
 }
 
-async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promise<U> {
+function addressToString(value: Address | string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const addr = typeof value === 'string' ? Address.parse(value) : value;
+  return addr.toRawString();
+}
+
+/**
+ * Prepares and validates API response data
+ * @template U - The success response type
+ * @template E - The error type (defaults to TonApiError)
+ * @throws {E} Always throws error of type E on failure
+ */
+function prepareResponse<U, E = TonApiError>(promise: Promise<any>, orSchema?: any): TonApiPromise<U, E> {
   return promise
       .then(obj => {
           try {
@@ -96,7 +129,7 @@ async function prepareResponse<U>(promise: Promise<any>, orSchema?: any): Promis
           }
 
           throw new TonApiUnknownError('Unknown error occurred', response);
-      });
+      }) as TonApiPromise<U, E>;
 }
 
 function prepareResponseData<U>(obj: any, orSchema?: any, originalResponse: unknown = obj): U {
@@ -266,7 +299,7 @@ function prepareRequestData(data: any, orSchema?: any): any {
   } else if (schema) {
       if (schema.type === 'string') {
           if (schema.format === 'address') {
-              return (data as Address).toRawString();
+              return addressToString(data as Address | string);
           }
 
           if (schema.format === 'cell') {

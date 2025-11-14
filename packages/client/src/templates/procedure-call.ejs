@@ -46,7 +46,10 @@ const requestConfigParam = {
     defaultValue: "{}",
 }
 
-const argToTmpl = ({ name, optional, type, defaultValue }) => `${name}${!defaultValue && optional ? '?' : ''}: ${type}${defaultValue ? ` = ${defaultValue}` : ''}`;
+const argToTmpl = ({ name, optional, type, defaultValue }) => {
+    const paramType = type === 'Address' ? 'Address | string' : type;
+    return `${name}${!defaultValue && optional ? '?' : ''}: ${paramType}${defaultValue ? ` = ${defaultValue}` : ''}`;
+};
 
 const rawWrapperArgs = _.compact([
     ...pathParams,
@@ -88,9 +91,11 @@ const bodyContentKindTmpl = requestContentKind[requestBodyInfo.contentKind] || n
 const responseFormatTmpl = responseContentKind[successResponse.contentKind] || null;
 const securityTmpl = security ? 'true' : null;
 
-const describeReturnType = () => !config.toJS ? '' : `MethodResult<${type}, ThrowOnError>`;
+// For throwOnError: true, return PromiseWithError<T, TonApiError>
+// For throwOnError: false, return Promise<Result<T>>
+const describeReturnType = () => `Promise<MethodResultSync<${type}, ThrowOnError>>`;
 
-const reducedPathParams = addressType.map((name) => `const ${name} = ${getNameAddressFromId(name)}.toRawString();`).join('\n');
+const reducedPathParams = addressType.map((name) => `const ${name} = addressToString(${getNameAddressFromId(name)});`).join('\n');
 
 const rawRequestBody = route.raw.requestBody;
 const rawRequestBodySchema = rawRequestBody && rawRequestBody.$ref ? getComponentByRef(rawRequestBody.$ref) : rawRequestBody;
@@ -107,7 +112,7 @@ const requestBodyTmpl = rawRequestBodySchemaContent ? `, ${JSON.stringify(utils.
 const queryAddressParams = route.routeParams.query.filter(param => param.format === 'address')
 const queryTmplValue = queryAddressParams.length === 0 ? queryTmpl : `${queryTmpl} && {
     ...${queryTmpl},
-    ${queryAddressParams.map(param => `${param.name}: ${queryTmpl}.${param.name}?.toRawString()`).join(',\n')}
+    ${queryAddressParams.map(param => `${param.name}: addressToString(${queryTmpl}.${param.name})`).join(',\n')}
 }`
 const queryImplodeParams = route.routeParams.query.
     filter(param => param.explode === false)
@@ -120,7 +125,8 @@ const generatePathFieldName = (param) => {
     return param.name.endsWith('_Address') ? param.name.slice(0, -8) : param.name;
 };
 
-const generateOptionsInterface = () => {
+// Generate type declaration for options (e.g., type StatusOptions<ThrowOnError> = {...})
+const generateOptionsTypeDeclaration = () => {
     const fields = [];
 
     // Always add client
@@ -131,7 +137,8 @@ const generateOptionsInterface = () => {
         const pathFields = pathParams.map(param => {
             const fieldName = generatePathFieldName(param);
             const optional = param.optional ? '?' : '';
-            return `${fieldName}${optional}: ${param.type}`;
+            const paramType = param.type === 'Address' ? 'Address | string' : param.type;
+            return `${fieldName}${optional}: ${paramType}`;
         }).join(';\n        ');
         fields.push(`path: {\n        ${pathFields};\n    };`);
     }
@@ -154,10 +161,17 @@ const generateOptionsInterface = () => {
     // Add throwOnError for conditional return type
     fields.push('throwOnError?: ThrowOnError;');
 
-    return `{\n    ${fields.join('\n    ')}\n}`;
+    const typeName = _.upperFirst(route.routeName.usage) + 'Options';
+    return `type ${typeName}<ThrowOnError extends boolean = false> = {\n    ${fields.join('\n    ')}\n};`;
 };
 
-const optionsType = generateOptionsInterface();
+// Generate the type name to use in function signature
+const generateOptionsTypeName = () => {
+    const typeName = _.upperFirst(route.routeName.usage) + 'Options';
+    return `${typeName}<ThrowOnError>`;
+};
+
+const optionsType = generateOptionsTypeName();
 const optionsArgument = `options${isOptionsRequired() ? '' : '?'}`;
 
 // Generate all arguments for calling the instance method
@@ -199,29 +213,39 @@ const generateAllArguments = () => {
 
  */
 <% if (isFlat) { %>
-export const <%~ route.routeName.usage %> = async <ThrowOnError extends boolean = false>(<%~ optionsArgument %>: <%~ optionsType %>)<%~ config.toJS ? `: ${describeReturnType()}` : "" %> => {
+<%~ generateOptionsTypeDeclaration() %>
+
+export const <%~ route.routeName.usage %> = async <ThrowOnError extends boolean = false>(<%~ optionsArgument %>: <%~ optionsType %>): <%~ describeReturnType() %> => {
     try {
         const client = <%= isOptionsRequired() ? 'options.client' : 'options?.client' %> || getDefaultClient();
         const result = await client.<%~ route.routeName.usage %>(<%~ generateAllArguments() %>);
 
         // If throwOnError is true, return data directly
         if (options?.throwOnError) {
-            return result as any;
+            return result as MethodResultSync<<%~ type %>, ThrowOnError>;
         }
 
-        return { data: result, error: null } as any;
+        return { data: result, error: null } as MethodResultSync<<%~ type %>, ThrowOnError>;
     } catch (error) {
         // If throwOnError is true, rethrow the error
         if (options?.throwOnError) {
             throw error;
         }
-        return { data: null, error: error as TonApiError } as any;
+        return { data: null, error: error as TonApiError } as MethodResultSync<<%~ type %>, ThrowOnError>;
     }
 };
 <% } else { %>
-async <%~ route.routeName.usage %>(<%~ wrapperArgs %>)<%~ config.toJS ? `: Promise<${type}>` : "" %> {
+/**
+<%~ routeDocs.description %>
+
+ *<% /* Here you can add some other JSDoc tags */ %>
+
+<%~ routeDocs.lines %>
+
+ */
+<%~ route.routeName.usage %>(<%~ wrapperArgs %>): TonApiPromise<<%~ type %>, TonApiError> {
     <%~ reducedPathParams %>
-    const req = this.http.request<<%~ type %>, <%~ errorType %>>({
+    const req = this.http.request<<%~ type %>, TonApiError>({
         path: `<%~ path %>`,
         method: '<%~ _.upperCase(method) %>',
         <%~ queryTmpl ? `query: ${queryTmplValue},` : '' %>
@@ -233,7 +257,7 @@ async <%~ route.routeName.usage %>(<%~ wrapperArgs %>)<%~ config.toJS ? `: Promi
         ...<%~ _.get(requestConfigParam, "name") %>,
     });
 
-    return prepareResponse<<%~ type %>>(req<%~ schemaTmpl %>);
+    return prepareResponse<<%~ type %>, TonApiError>(req<%~ schemaTmpl %>);
 }
 <% } %>
 
