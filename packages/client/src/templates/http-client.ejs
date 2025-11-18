@@ -142,7 +142,8 @@ class HttpClient {
             .map((val: any) => encodeURIComponent(typeof val === 'number' ? val : `${val}`))
             .join(',');
 
-        return this.encodeQueryParam(key, value);
+        // Don't double-encode: value is already encoded, only encode the key
+        return `${encodeURIComponent(key)}=${value}`;
     }
 
     protected addArrayQueryParam(query: QueryParamsType, key: string, implodeParams?: string[]) {

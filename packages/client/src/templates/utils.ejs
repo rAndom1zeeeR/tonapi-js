@@ -81,6 +81,22 @@ function addressToString(value: Address | string | undefined): string | undefine
     return value;
   }
 
+  // Return raw format for Address objects
+  return value.toRawString();
+}
+
+function tokenOrAddressToString(value: Address | string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    // Return string as-is without validation
+    // This allows cryptocurrency codes like "ton", "btc" to pass through
+    return value;
+  }
+
+  // Return raw format for Address objects
   return value.toRawString();
 }
 
@@ -343,6 +359,16 @@ function prepareRequestData(data: any, orSchema?: any): any {
       return data.map(item => prepareRequestData(item, itemSchema));
   } else if (schema) {
       if (schema.type === 'string') {
+          // Check x-js-format first for custom formats
+          if (schema['x-js-format'] === 'token-or-address') {
+              return tokenOrAddressToString(data as Address | string);
+          }
+
+          if (schema['x-js-format'] === 'bigint') {
+              return (data as bigint).toString();
+          }
+
+          // Then check standard format field
           if (schema.format === 'address') {
               return addressToString(data as Address | string);
           }
@@ -353,10 +379,6 @@ function prepareRequestData(data: any, orSchema?: any): any {
 
           if (schema.format === 'cell-base64') {
               return cellToString(data as Cell | string, 'base64');
-          }
-
-          if (schema['x-js-format'] === 'bigint') {
-              return (data as bigint).toString();
           }
       }
   }

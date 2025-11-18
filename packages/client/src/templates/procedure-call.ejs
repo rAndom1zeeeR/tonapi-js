@@ -46,8 +46,25 @@ const requestConfigParam = {
     defaultValue: "{}",
 }
 
+// Transform Address/Cell types to accept strings in parameter types
+const transformParameterType = (typeString) => {
+    if (!typeString) return typeString;
+
+    // Replace Address with (Address | string), Cell with (Cell | string)
+    // Handle all contexts:
+    // - Simple: Address -> (Address | string)
+    // - Arrays: Address[] -> (Address | string)[]
+    // - Unions: Address | null -> (Address | string) | null
+    // - Objects: { field: Address } -> { field: (Address | string) }
+    // - Nested: { items: Address[] } -> { items: (Address | string)[] }
+
+    return typeString
+        .replace(/\bAddress\b/g, '(Address | string)')
+        .replace(/\bCell\b/g, '(Cell | string)');
+};
+
 const argToTmpl = ({ name, optional, type, defaultValue }) => {
-    const paramType = type === 'Address' ? 'Address | string' : type;
+    const paramType = transformParameterType(type);
     return `${name}${!defaultValue && optional ? '?' : ''}: ${paramType}${defaultValue ? ` = ${defaultValue}` : ''}`;
 };
 
@@ -109,10 +126,22 @@ const requestBodyTmpl = rawRequestBodySchemaContent ? `, ${JSON.stringify(utils.
 //     global.singleRunTestConsole = true;
 // }
 
-const queryAddressParams = route.routeParams.query.filter(param => param.format === 'address')
-const queryTmplValue = queryAddressParams.length === 0 ? queryTmpl : `${queryTmpl} && {
+const queryTokenOrAddressParams = route.routeParams.query.filter(param => {
+    if (!param.schema) return false;
+    // Check both schema and schema.items for x-js-format (items for arrays)
+    return param.schema['x-js-format'] === 'token-or-address' ||
+           (param.schema.items && param.schema.items['x-js-format'] === 'token-or-address');
+})
+const queryAddressParams = route.routeParams.query.filter(param => param.format === 'address' && !queryTokenOrAddressParams.includes(param))
+const queryAddressLikeParams = [...queryAddressParams, ...queryTokenOrAddressParams]
+const queryTmplValue = queryAddressLikeParams.length === 0 ? queryTmpl : `${queryTmpl} && {
     ...${queryTmpl},
-    ${queryAddressParams.map(param => `${param.name}: addressToString(${queryTmpl}.${param.name})`).join(',\n')}
+    ${queryAddressParams.map(param => `${param.name}: addressToString(${queryTmpl}.${param.name})`).join(',\n')}${queryAddressParams.length > 0 && queryTokenOrAddressParams.length > 0 ? ',\n' : ''}${queryTokenOrAddressParams.map(param => {
+        const isArray = param.schema && param.schema.type === 'array';
+        return isArray
+            ? `${param.name}: ${queryTmpl}.${param.name}.map(item => tokenOrAddressToString(item))`
+            : `${param.name}: tokenOrAddressToString(${queryTmpl}.${param.name})`;
+    }).join(',\n')}
 }`
 const queryImplodeParams = route.routeParams.query.
     filter(param => param.explode === false)
@@ -137,7 +166,7 @@ const generateOptionsTypeDeclaration = () => {
         const pathFields = pathParams.map(param => {
             const fieldName = generatePathFieldName(param);
             const optional = param.optional ? '?' : '';
-            const paramType = param.type === 'Address' ? 'Address | string' : param.type;
+            const paramType = transformParameterType(param.type);
             return `${fieldName}${optional}: ${paramType}`;
         }).join(';\n        ');
         fields.push(`path: {\n        ${pathFields};\n    };`);
@@ -146,13 +175,13 @@ const generateOptionsTypeDeclaration = () => {
     // Add body field if there is a payload
     if (hasBodyParams()) {
         const bodyOptional = payload.optional ? '?' : '';
-        fields.push(`body${bodyOptional}: ${payload.type};`);
+        fields.push(`body${bodyOptional}: ${transformParameterType(payload.type)};`);
     }
 
     // Add query field if there are query parameters
     if (hasQueryParams()) {
         const queryOptional = query.optional ? '?' : '';
-        fields.push(`query${queryOptional}: ${query.type};`);
+        fields.push(`query${queryOptional}: ${transformParameterType(query.type)};`);
     }
 
     // Always add params

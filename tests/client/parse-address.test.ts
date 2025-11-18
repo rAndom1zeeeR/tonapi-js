@@ -23,6 +23,7 @@ test('Address simple in params & response', async () => {
 
     expect(data).toBeDefined();
     expect(Address.isAddress(data?.address)).toBe(true);
+    // Address objects are serialized to raw format
     expect(fetchSpy).toHaveBeenCalledWith(
         expect.stringContaining(addressRawString),
         expect.any(Object)
@@ -41,11 +42,12 @@ test('Address in request body test', async () => {
     const data = await ta.getAccounts({ accountIds });
 
     expect(data).toBeDefined();
+    // Address objects are serialized to raw format
     expect(fetchSpy).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
             body: JSON.stringify({
-                account_ids: addressStrings.map(addr => Address.parse(addr).toRawString())
+                account_ids: addressStrings
             })
         })
     );
