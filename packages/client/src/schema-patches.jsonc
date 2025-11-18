@@ -58,5 +58,18 @@
         "description": "jetton master address usdt for example"
       }
     ]
+  },
+
+  // Fix JettonTransferPayload response fields to use cell format
+  // custom_payload and state_init are hex-encoded BoC that should be parsed as Cell
+  "components.schemas.JettonTransferPayload.properties.custom_payload": {
+    "type": "string",
+    "format": "cell",
+    "description": "hex-encoded BoC"
+  },
+  "components.schemas.JettonTransferPayload.properties.state_init": {
+    "type": "string",
+    "format": "cell",
+    "description": "hex-encoded BoC"
   }
 }
