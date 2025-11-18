@@ -3715,7 +3715,8 @@ class HttpClient {
             .map((val: any) => encodeURIComponent(typeof val === 'number' ? val : `${val}`))
             .join(',');
 
-        return this.encodeQueryParam(key, value);
+        // Don't double-encode: value is already encoded, only encode the key
+        return `${encodeURIComponent(key)}=${value}`;
     }
 
     protected addArrayQueryParam(query: QueryParamsType, key: string, implodeParams?: string[]) {
@@ -6673,6 +6674,22 @@ function addressToString(value: Address | string | undefined): string | undefine
         return value;
     }
 
+    // Return raw format for Address objects
+    return value.toRawString();
+}
+
+function tokenOrAddressToString(value: Address | string | undefined): string | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (typeof value === 'string') {
+        // Return string as-is without validation
+        // This allows cryptocurrency codes like "ton", "btc" to pass through
+        return value;
+    }
+
+    // Return raw format for Address objects
     return value.toRawString();
 }
 
@@ -6930,6 +6947,16 @@ function prepareRequestData(data: any, orSchema?: any): any {
         return data.map(item => prepareRequestData(item, itemSchema));
     } else if (schema) {
         if (schema.type === 'string') {
+            // Check x-js-format first for custom formats
+            if (schema['x-js-format'] === 'token-or-address') {
+                return tokenOrAddressToString(data as Address | string);
+            }
+
+            if (schema['x-js-format'] === 'bigint') {
+                return (data as bigint).toString();
+            }
+
+            // Then check standard format field
             if (schema.format === 'address') {
                 return addressToString(data as Address | string);
             }
@@ -6940,10 +6967,6 @@ function prepareRequestData(data: any, orSchema?: any): any {
 
             if (schema.format === 'cell-base64') {
                 return cellToString(data as Cell | string, 'base64');
-            }
-
-            if (schema['x-js-format'] === 'bigint') {
-                return (data as bigint).toString();
             }
         }
     }
@@ -7711,9 +7734,9 @@ export class TonApiClient {
     sendBlockchainMessage(
         data: {
             /** @format cell */
-            boc?: Cell;
+            boc?: Cell | string;
             /** @maxItems 5 */
-            batch?: Cell[];
+            batch?: (Cell | string)[];
             meta?: Record<string, string>;
         },
         params: RequestParams = {}
@@ -7874,7 +7897,7 @@ export class TonApiClient {
      */
     getAccounts(
         data: {
-            accountIds: Address[];
+            accountIds: (Address | string)[];
         },
         query?: {
             /** @example "usd" */
@@ -8186,7 +8209,7 @@ export class TonApiClient {
              * @format address
              * @example "0:06d811f426598591b32b2c49f29f66c821368e4acb1de16762b04e0174532465"
              */
-            collection?: Address;
+            collection?: Address | string;
             /**
              * @min 1
              * @max 1000
@@ -8886,7 +8909,7 @@ export class TonApiClient {
      */
     getNftCollectionItemsByAddresses(
         data: {
-            accountIds: Address[];
+            accountIds: (Address | string)[];
         },
         params: RequestParams = {}
     ): TonApiPromise<GetNftCollectionItemsByAddressesData, TonApiError> {
@@ -8970,7 +8993,7 @@ export class TonApiClient {
      */
     getNftItemsByAddresses(
         data: {
-            accountIds: Address[];
+            accountIds: (Address | string)[];
         },
         params: RequestParams = {}
     ): TonApiPromise<GetNftItemsByAddressesData, TonApiError> {
@@ -9370,7 +9393,7 @@ export class TonApiClient {
      */
     getJettonInfosByAddresses(
         data: {
-            accountIds: Address[];
+            accountIds: (Address | string)[];
         },
         params: RequestParams = {}
     ): TonApiPromise<GetJettonInfosByAddressesData, TonApiError> {
@@ -9655,7 +9678,7 @@ export class TonApiClient {
              * @format address
              * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
              */
-            available_for?: Address;
+            available_for?: Address | string;
             /**
              * return also pools not from white list - just compatible by interfaces (maybe dangerous!)
              * @example false
@@ -9741,15 +9764,15 @@ export class TonApiClient {
     getRates(
         query: {
             /**
-             * accept cryptocurrencies or jetton master addresses, separated by commas
+             * accept cryptocurrencies and jetton master addresses, separated by commas
              * @maxItems 100
-             * @example ["ton"]
+             * @example ["ton","btc","EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"]
              */
             tokens: (Address | string)[];
             /**
-             * accept cryptocurrencies and all possible fiat currencies, separated by commas
+             * accept cryptocurrencies and all possible fiat currencies
              * @maxItems 50
-             * @example ["ton","usd","rub"]
+             * @example ["ton","btc","usd","rub"]
              */
             currencies: string[];
         },
@@ -9758,7 +9781,10 @@ export class TonApiClient {
         const req = this.http.request<GetRatesData, TonApiError>({
             path: `/v2/rates`,
             method: 'GET',
-            query: query,
+            query: query && {
+                ...query,
+                tokens: query.tokens.map(item => tokenOrAddressToString(item))
+            },
             queryImplode: ['tokens', 'currencies'],
             format: 'json',
             ...params
@@ -9792,7 +9818,11 @@ export class TonApiClient {
      */
     getChartRates(
         query: {
-            /** accept cryptocurrencies or jetton master addresses */
+            /**
+             * accept cryptocurrency or jetton master address
+             * @format token-or-address
+             * @example [{"value":"ton","description":"cryptocurrency code (ton, btc, etc.)"},{"value":"EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs","description":"jetton master address usdt for example"}]
+             */
             token: Address | string;
             /** @example "usd" */
             currency?: string;
@@ -9821,7 +9851,10 @@ export class TonApiClient {
         const req = this.http.request<GetChartRatesData, TonApiError>({
             path: `/v2/rates/chart`,
             method: 'GET',
-            query: query,
+            query: query && {
+                ...query,
+                token: tokenOrAddressToString(query.token)
+            },
             format: 'json',
             ...params
         });
@@ -9914,7 +9947,7 @@ export class TonApiClient {
     getAccountInfoByStateInit(
         data: {
             /** @format cell-base64 */
-            stateInit: Cell;
+            stateInit: Cell | string;
         },
         params: RequestParams = {}
     ): TonApiPromise<GetAccountInfoByStateInitData, TonApiError> {
@@ -9955,7 +9988,7 @@ export class TonApiClient {
              * @format address
              * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
              */
-            address: Address;
+            address: Address | string;
             proof: {
                 /**
                  * @format int64
@@ -9971,7 +10004,7 @@ export class TonApiClient {
                 /** @example "84jHVNLQmZsAAAAAZB0Zryi2wqVJI-KaKNXOvCijEi46YyYzkaSHyJrMPBMOkVZa" */
                 payload: string;
                 /** @format cell-base64 */
-                stateInit?: Cell;
+                stateInit?: Cell | string;
             };
         },
         params: RequestParams = {}
@@ -10159,11 +10192,11 @@ export class TonApiClient {
             /** @default false */
             returnEmulation?: boolean;
             /** @format address */
-            walletAddress: Address;
+            walletAddress: Address | string;
             walletPublicKey: string;
             messages: {
                 /** @format cell */
-                boc: Cell;
+                boc: Cell | string;
             }[];
         },
         params: RequestParams = {}
@@ -10218,7 +10251,7 @@ export class TonApiClient {
             /** hex encoded public key */
             walletPublicKey: string;
             /** @format cell */
-            boc: Cell;
+            boc: Cell | string;
         },
         params: RequestParams = {}
     ): TonApiPromise<GaslessSendData, TonApiError> {
@@ -10495,7 +10528,7 @@ export class TonApiClient {
     sendRawMessage(
         data: {
             /** @format cell-base64 */
-            body: Cell;
+            body: Cell | string;
         },
         params: RequestParams = {}
     ): TonApiPromise<SendRawMessageData, TonApiError> {
@@ -10748,7 +10781,7 @@ export class TonApiClient {
              * @format address
              * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
              */
-            account_id?: Address;
+            account_id?: Address | string;
             /**
              * lt
              * @format int64
@@ -11135,7 +11168,7 @@ export class TonApiClient {
     decodeMessage(
         data: {
             /** @format cell */
-            boc: Cell;
+            boc: Cell | string;
         },
         params: RequestParams = {}
     ): TonApiPromise<DecodeMessageData, TonApiError> {
@@ -11173,7 +11206,7 @@ export class TonApiClient {
     emulateMessageToEvent(
         data: {
             /** @format cell */
-            boc: Cell;
+            boc: Cell | string;
         },
         query?: {
             ignore_signature_check?: boolean;
@@ -11215,7 +11248,7 @@ export class TonApiClient {
     emulateMessageToTrace(
         data: {
             /** @format cell */
-            boc: Cell;
+            boc: Cell | string;
         },
         query?: {
             ignore_signature_check?: boolean;
@@ -11257,14 +11290,14 @@ export class TonApiClient {
     emulateMessageToWallet(
         data: {
             /** @format cell */
-            boc: Cell;
+            boc: Cell | string;
             /** additional per account configuration */
             params?: {
                 /**
                  * @format address
                  * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
                  */
-                address: Address;
+                address: Address | string;
                 /**
                  * @format bigint
                  * @example 10000000000
@@ -11331,7 +11364,7 @@ export class TonApiClient {
         accountId_Address: Address | string,
         data: {
             /** @format cell */
-            boc: Cell;
+            boc: Cell | string;
         },
         query?: {
             ignore_signature_check?: boolean;
@@ -12438,9 +12471,9 @@ type SendBlockchainMessageOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
         /** @format cell */
-        boc?: Cell;
+        boc?: Cell | string;
         /** @maxItems 5 */
-        batch?: Cell[];
+        batch?: (Cell | string)[];
         meta?: Record<string, string>;
     };
     params?: RequestParams;
@@ -12653,7 +12686,7 @@ export const getLibraryByHash = async <ThrowOnError extends boolean = false>(
 type GetAccountsOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
-        accountIds: Address[];
+        accountIds: (Address | string)[];
     };
     query?: {
         /** @example "usd" */
@@ -13045,7 +13078,7 @@ type GetAccountNftItemsOptions<ThrowOnError extends boolean = false> = {
          * @format address
          * @example "0:06d811f426598591b32b2c49f29f66c821368e4acb1de16762b04e0174532465"
          */
-        collection?: Address;
+        collection?: Address | string;
         /**
          * @min 1
          * @max 1000
@@ -13943,7 +13976,7 @@ export const getNftCollection = async <ThrowOnError extends boolean = false>(
 type GetNftCollectionItemsByAddressesOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
-        accountIds: Address[];
+        accountIds: (Address | string)[];
     };
     params?: RequestParams;
     throwOnError?: ThrowOnError;
@@ -14046,7 +14079,7 @@ export const getItemsFromCollection = async <ThrowOnError extends boolean = fals
 type GetNftItemsByAddressesOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
-        accountIds: Address[];
+        accountIds: (Address | string)[];
     };
     params?: RequestParams;
     throwOnError?: ThrowOnError;
@@ -14552,7 +14585,7 @@ export const getJettonInfo = async <ThrowOnError extends boolean = false>(
 type GetJettonInfosByAddressesOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
-        accountIds: Address[];
+        accountIds: (Address | string)[];
     };
     params?: RequestParams;
     throwOnError?: ThrowOnError;
@@ -14927,7 +14960,7 @@ type GetStakingPoolsOptions<ThrowOnError extends boolean = false> = {
          * @format address
          * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
          */
-        available_for?: Address;
+        available_for?: Address | string;
         /**
          * return also pools not from white list - just compatible by interfaces (maybe dangerous!)
          * @example false
@@ -15013,15 +15046,15 @@ type GetRatesOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     query: {
         /**
-         * accept cryptocurrencies or jetton master addresses, separated by commas
+         * accept cryptocurrencies and jetton master addresses, separated by commas
          * @maxItems 100
-         * @example ["ton"]
+         * @example ["ton","btc","EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"]
          */
         tokens: (Address | string)[];
         /**
-         * accept cryptocurrencies and all possible fiat currencies, separated by commas
+         * accept cryptocurrencies and all possible fiat currencies
          * @maxItems 50
-         * @example ["ton","usd","rub"]
+         * @example ["ton","btc","usd","rub"]
          */
         currencies: string[];
     };
@@ -15063,7 +15096,11 @@ export const getRates = async <ThrowOnError extends boolean = false>(
 type GetChartRatesOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     query: {
-        /** accept cryptocurrencies or jetton master addresses */
+        /**
+         * accept cryptocurrency or jetton master address
+         * @format token-or-address
+         * @example [{"value":"ton","description":"cryptocurrency code (ton, btc, etc.)"},{"value":"EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs","description":"jetton master address usdt for example"}]
+         */
         token: Address | string;
         /** @example "usd" */
         currency?: string;
@@ -15203,7 +15240,7 @@ type GetAccountInfoByStateInitOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
         /** @format cell-base64 */
-        stateInit: Cell;
+        stateInit: Cell | string;
     };
     params?: RequestParams;
     throwOnError?: ThrowOnError;
@@ -15250,7 +15287,7 @@ type TonConnectProofOptions<ThrowOnError extends boolean = false> = {
          * @format address
          * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
          */
-        address: Address;
+        address: Address | string;
         proof: {
             /**
              * @format int64
@@ -15266,7 +15303,7 @@ type TonConnectProofOptions<ThrowOnError extends boolean = false> = {
             /** @example "84jHVNLQmZsAAAAAZB0Zryi2wqVJI-KaKNXOvCijEi46YyYzkaSHyJrMPBMOkVZa" */
             payload: string;
             /** @format cell-base64 */
-            stateInit?: Cell;
+            stateInit?: Cell | string;
         };
     };
     params?: RequestParams;
@@ -15478,11 +15515,11 @@ type GaslessEstimateOptions<ThrowOnError extends boolean = false> = {
         /** @default false */
         returnEmulation?: boolean;
         /** @format address */
-        walletAddress: Address;
+        walletAddress: Address | string;
         walletPublicKey: string;
         messages: {
             /** @format cell */
-            boc: Cell;
+            boc: Cell | string;
         }[];
     };
     params?: RequestParams;
@@ -15530,7 +15567,7 @@ type GaslessSendOptions<ThrowOnError extends boolean = false> = {
         /** hex encoded public key */
         walletPublicKey: string;
         /** @format cell */
-        boc: Cell;
+        boc: Cell | string;
     };
     params?: RequestParams;
     throwOnError?: ThrowOnError;
@@ -15840,7 +15877,7 @@ type SendRawMessageOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
         /** @format cell-base64 */
-        body: Cell;
+        body: Cell | string;
     };
     params?: RequestParams;
     throwOnError?: ThrowOnError;
@@ -16126,7 +16163,7 @@ type GetRawListBlockTransactionsOptions<ThrowOnError extends boolean = false> = 
          * @format address
          * @example "0:97264395BD65A255A429B11326C84128B7D70FFED7949ABAE3036D506BA38621"
          */
-        account_id?: Address;
+        account_id?: Address | string;
         /**
          * lt
          * @format int64
@@ -16459,7 +16496,7 @@ type DecodeMessageOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
         /** @format cell */
-        boc: Cell;
+        boc: Cell | string;
     };
     params?: RequestParams;
     throwOnError?: ThrowOnError;
@@ -16500,7 +16537,7 @@ type EmulateMessageToEventOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
         /** @format cell */
-        boc: Cell;
+        boc: Cell | string;
     };
     query?: {
         ignore_signature_check?: boolean;
@@ -16551,7 +16588,7 @@ type EmulateMessageToTraceOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
         /** @format cell */
-        boc: Cell;
+        boc: Cell | string;
     };
     query?: {
         ignore_signature_check?: boolean;
@@ -16602,14 +16639,14 @@ type EmulateMessageToWalletOptions<ThrowOnError extends boolean = false> = {
     client?: TonApiClient;
     body: {
         /** @format cell */
-        boc: Cell;
+        boc: Cell | string;
         /** additional per account configuration */
         params?: {
             /**
              * @format address
              * @example "0:97146a46acc2654y27947f14c4a4b14273e954f78bc017790b41208b0043200b"
              */
-            address: Address;
+            address: Address | string;
             /**
              * @format bigint
              * @example 10000000000
@@ -16670,7 +16707,7 @@ type EmulateMessageToAccountEventOptions<ThrowOnError extends boolean = false> =
     };
     body: {
         /** @format cell */
-        boc: Cell;
+        boc: Cell | string;
     };
     query?: {
         ignore_signature_check?: boolean;

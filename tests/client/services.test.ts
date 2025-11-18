@@ -81,8 +81,8 @@ test('getChartRates, should serialize Address object to string', async () => {
     const url = fetchSpy.mock.calls[0]?.[0] as string;
     const searchParams = new URL(url).searchParams;
 
-    // Address object should be serialized to its string representation
-    expect(searchParams.get('token')).toBe(addressString);
+    // Address object should be serialized to raw format
+    expect(searchParams.get('token')).toBe(addressObject.toRawString());
     expect(searchParams.get('currency')).toBe('usd');
 });
 
@@ -102,4 +102,76 @@ test('getChartRates, should accept string token directly', async () => {
 
     expect(searchParams.get('token')).toBe(addressString);
     expect(searchParams.get('currency')).toBe('usd');
+});
+
+test('getRates, should accept cryptocurrency codes (ton, btc) without validation error', async () => {
+    const fetchSpy = mockFetch(getRatesMock);
+
+    await ta.getRates({
+        tokens: ['ton', 'btc'],
+        currencies: ['usd', 'rub']
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0]?.[0] as string;
+    const searchParams = new URL(url).searchParams;
+
+    expect(searchParams.get('tokens')).toBe('ton,btc');
+    expect(searchParams.get('currencies')).toBe('usd,rub');
+});
+
+test('getChartRates, should accept cryptocurrency code (ton) without validation error', async () => {
+    const fetchSpy = mockFetch(getChartRatesMock);
+
+    await ta.getChartRates({
+        token: 'ton',
+        currency: 'usd'
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0]?.[0] as string;
+    const searchParams = new URL(url).searchParams;
+
+    expect(searchParams.get('token')).toBe('ton');
+    expect(searchParams.get('currency')).toBe('usd');
+});
+
+test('getRates, should serialize Address objects to raw format', async () => {
+    const fetchSpy = mockFetch(getRatesMock);
+
+    const address1 = Address.parse('EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs');
+    const address2 = Address.parse('UQC62nZpm36EFzADVfXDVd_4OpbFyc1D3w3ZvCPHLni8Dst4');
+
+    await ta.getRates({
+        tokens: [address1, address2],
+        currencies: ['usd', 'rub']
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0]?.[0] as string;
+    const searchParams = new URL(url).searchParams;
+
+    // Address objects should be serialized to raw format
+    expect(searchParams.get('tokens')).toBe(`${address1.toRawString()},${address2.toRawString()}`);
+    expect(searchParams.get('currencies')).toBe('usd,rub');
+});
+
+test('getRates, should handle mixed array of Address objects, cryptocurrency codes, and address strings', async () => {
+    const fetchSpy = mockFetch(getRatesMock);
+
+    const addressObject = Address.parse('EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs');
+    const addressString = '0:b113a994b5024a16719f69139328eb759596c38a25f59028b146fecdc3621dfe';
+
+    await ta.getRates({
+        tokens: [addressObject, 'ton', addressString, 'btc'],
+        currencies: ['usd']
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0]?.[0] as string;
+    const searchParams = new URL(url).searchParams;
+
+    // Mixed: Address object (raw), cryptocurrency code (as-is), address string (as-is), cryptocurrency code (as-is)
+    expect(searchParams.get('tokens')).toBe(`${addressObject.toRawString()},ton,${addressString},btc`);
+    expect(searchParams.get('currencies')).toBe('usd');
 });

@@ -1789,22 +1789,22 @@ paths:
       parameters:
         - in: query
           name: tokens
-          description: accept cryptocurrencies or jetton master addresses, separated by commas
+          description: accept cryptocurrencies and jetton master addresses, separated by commas
           required: true
           explode: false
           schema:
             type: array
             maxItems: 100
             items:
-              oneOf:
-                - type: string
-                  format: address
-                - type: string
+              type: string
+              x-js-format: token-or-address
             example:
               - ton
+              - btc
+              - EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs
         - in: query
           name: currencies
-          description: accept cryptocurrencies and all possible fiat currencies, separated by commas
+          description: accept cryptocurrencies and all possible fiat currencies
           required: true
           explode: false
           schema:
@@ -1814,6 +1814,7 @@ paths:
               type: string
             example:
               - ton
+              - btc
               - usd
               - rub
       responses:
@@ -1841,13 +1842,16 @@ paths:
       parameters:
         - in: query
           name: token
-          description: accept cryptocurrencies or jetton master addresses
+          description: accept cryptocurrency or jetton master address
           required: true
           schema:
-            oneOf:
-              - type: string
-                format: address
-              - type: string
+            type: string
+            x-js-format: token-or-address
+            example:
+              - value: ton
+                description: cryptocurrency code (ton, btc, etc.)
+              - value: EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs
+                description: jetton master address usdt for example
         - in: query
           name: currency
           required: false

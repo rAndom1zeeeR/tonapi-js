@@ -8,6 +8,7 @@
     "test": "vitest run tests/",
     "test:client": "vitest run tests/client",
     "test:adapters": "vitest run tests/adapters",
+    "test:integration": "INTEGRATION=true vitest run tests/client/integration.test.ts",
     "test:watch": "vitest",
     "build": "turbo run build",
     "build:client": "turbo run build --filter=@ton-api/client",

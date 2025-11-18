@@ -42,7 +42,7 @@ const openapiUrl = 'https://tonapi.io/v2/openapi.yml';
  * The patch will be applied every time you run `npm run build`.
  * To add new patches, simply edit src/schema-patches.json.
  */
-const schemaPatchesPath = path.resolve(process.cwd(), 'src/schema-patches.json');
+const schemaPatchesPath = path.resolve(process.cwd(), 'src/schema-patches.jsonc');
 
 function downloadSchema(url: string, outputPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -64,38 +64,115 @@ function downloadSchema(url: string, outputPath: string): Promise<void> {
 }
 
 /**
- * Deep merge two objects with priority to patch values
+ * Parse a path string into array of keys
+ * Supports: "a.b.c", "a[0].b", "a[\"key.with.dots\"].b"
+ * Example: parsePath('a.b["c.d"][0].e') => ['a', 'b', 'c.d', '0', 'e']
  */
-function deepMerge(target: any, patch: any): any {
-    if (patch === null || patch === undefined) {
-        return target;
-    }
+function parsePath(path: string): string[] {
+    const keys: string[] = [];
+    let current = '';
+    let inBracket = false;
+    let inQuotes = false;
+    let quoteChar = '';
 
-    if (typeof patch !== 'object' || Array.isArray(patch)) {
-        return patch;
-    }
+    for (let i = 0; i < path.length; i++) {
+        const char = path[i];
 
-    const result = { ...target };
-
-    for (const key in patch) {
-        if (patch.hasOwnProperty(key)) {
-            if (
-                typeof patch[key] === 'object' &&
-                !Array.isArray(patch[key]) &&
-                patch[key] !== null
-            ) {
-                result[key] = deepMerge(target[key] || {}, patch[key]);
+        if (inBracket) {
+            if (inQuotes) {
+                if (char === quoteChar) {
+                    inQuotes = false;
+                } else {
+                    current += char;
+                }
+            } else if (char === '"' || char === "'") {
+                inQuotes = true;
+                quoteChar = char;
+            } else if (char === ']') {
+                if (current) keys.push(current);
+                current = '';
+                inBracket = false;
             } else {
-                result[key] = patch[key];
+                current += char;
             }
+        } else if (char === '[') {
+            if (current) {
+                keys.push(current);
+                current = '';
+            }
+            inBracket = true;
+        } else if (char === '.') {
+            if (current) {
+                keys.push(current);
+                current = '';
+            }
+        } else {
+            current += char;
         }
+    }
+
+    if (current) keys.push(current);
+    return keys;
+}
+
+/**
+ * Set a value in an object by path (supports dot notation and array indices)
+ * Example: setByPath(obj, 'a.b[0].c', value) sets obj.a.b[0].c = value
+ * Example: setByPath(obj, 'a["b.c"].d', value) sets obj.a["b.c"].d = value
+ */
+function setByPath(obj: any, path: string, value: any): void {
+    const keys = parsePath(path);
+    let current = obj;
+
+    for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        const nextKey = keys[i + 1];
+
+        // Check if next key is a number (array index)
+        const isNextKeyArray = /^\d+$/.test(nextKey);
+
+        // Initialize if doesn't exist
+        if (!(key in current)) {
+            current[key] = isNextKeyArray ? [] : {};
+        }
+
+        current = current[key];
+    }
+
+    // Set the final value
+    const lastKey = keys[keys.length - 1];
+    current[lastKey] = value;
+}
+
+/**
+ * Apply path-based patches to an object
+ * Patches format: { "path.to.property": value }
+ */
+function applyPatches(target: any, patches: Record<string, any>): any {
+    // Clone target to avoid mutation
+    const result = JSON.parse(JSON.stringify(target));
+
+    // Apply each patch by path
+    for (const [path, value] of Object.entries(patches)) {
+        setByPath(result, path, value);
     }
 
     return result;
 }
 
 /**
- * Apply patches from schema-patches.json to the downloaded schema
+ * Strip comments from JSONC (JSON with Comments)
+ */
+function stripJsonComments(jsonc: string): string {
+    // Remove single-line comments (// ...)
+    let result = jsonc.replace(/\/\/.*$/gm, '');
+    // Remove multi-line comments (/* ... */)
+    result = result.replace(/\/\*[\s\S]*?\*\//g, '');
+    return result;
+}
+
+/**
+ * Apply patches from schema-patches.jsonc to the downloaded schema
  */
 function applySchemaPatches(schemaPath: string, patchesPath: string): void {
     if (!fs.existsSync(patchesPath)) {
@@ -109,12 +186,13 @@ function applySchemaPatches(schemaPath: string, patchesPath: string): void {
     const schemaContent = fs.readFileSync(schemaPath, 'utf8');
     const schema = yaml.load(schemaContent) as any;
 
-    // Read the patches
+    // Read the patches (supports JSONC with comments)
     const patchesContent = fs.readFileSync(patchesPath, 'utf8');
-    const patches = JSON.parse(patchesContent);
+    const patchesJson = stripJsonComments(patchesContent);
+    const patches = JSON.parse(patchesJson);
 
     // Apply patches
-    const patchedSchema = deepMerge(schema, patches);
+    const patchedSchema = applyPatches(schema, patches);
 
     // Write back to file
     const yamlOutput = yaml.dump(patchedSchema, {
@@ -202,7 +280,8 @@ const generateApiParams: GenerateApiParams = {
             bigint: 'bigint',
             'cell-base64': 'Cell',
             'tuple-item': 'TupleItem',
-            'maybe-address': 'Address | null'
+            'maybe-address': 'Address | null',
+            'token-or-address': 'Address'
         }
     }),
     hooks: {
@@ -231,7 +310,7 @@ const generateApiParams: GenerateApiParams = {
 
 async function main() {
     // Download schema and apply patches automatically
-    // await downloadSchema(openapiUrl, openapiPath);
+    await downloadSchema(openapiUrl, openapiPath);
     applySchemaPatches(openapiPath, schemaPatchesPath);
 
     generateApi(generateApiParams);
