@@ -3693,7 +3693,7 @@ class HttpClient {
         const headers = {
             ...(baseApiParams.headers ?? {}),
             ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            'x-tonapi-client': `tonapi-js@0.5.0-alpha.7`
+            'x-tonapi-client': `tonapi-js@0.5.0-alpha.8`
         };
 
         const preparedApiConfig = {
