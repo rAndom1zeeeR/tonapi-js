@@ -6493,7 +6493,8 @@ export class TonApiParsingError extends TonApiErrorAbstract {
             {
                 type: parsingType,
                 message: message,
-                response: response
+                response: response,
+                stack: this.stack
             }
         );
     }
