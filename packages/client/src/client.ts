@@ -1431,8 +1431,7 @@ export interface BlockchainConfig {
     /** precompiled contracts */
     '45'?: {
         contracts: {
-            /** @format address */
-            codeHash: Address;
+            codeHash: string;
             /** @format int64 */
             gasUsage: number;
         }[];
@@ -4989,7 +4988,7 @@ const components = {
                             type: 'object',
                             required: ['code_hash', 'gas_usage'],
                             properties: {
-                                code_hash: { type: 'string', format: 'address' },
+                                code_hash: { type: 'string' },
                                 gas_usage: { type: 'integer', format: 'int64' }
                             }
                         }

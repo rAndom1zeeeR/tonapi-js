@@ -5522,7 +5522,6 @@ components:
                 properties:
                   code_hash:
                     type: string
-                    format: address
                   gas_usage:
                     type: integer
                     format: int64

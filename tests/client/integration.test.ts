@@ -137,4 +137,43 @@ test('getChartRates - real API call with address strings', async () => {
     expect(dataFriendly.points.length).toBeGreaterThan(0);
 });
 
+test('getBlockchainConfig - real API call', async () => {
+    const data = await ta.getBlockchainConfig();
+
+    expect(data).toBeDefined();
+
+    // Check raw config
+    expect(data.raw).toBeDefined();
+
+    // Check some common config parameters that should always exist
+    // Config 0: config address
+    expect(data['0']).toBeDefined();
+    expect(data['0']).toBeInstanceOf(Address);
+
+    // Config 1: elector address
+    expect(data['1']).toBeDefined();
+    expect(data['1']).toBeInstanceOf(Address);
+
+    // Config 8: version and capabilities
+    if (data['8']) {
+        expect(data['8'].version).toBeDefined();
+        expect(typeof data['8'].version).toBe('number');
+        expect(data['8'].capabilities).toBeDefined();
+        expect(typeof data['8'].capabilities).toBe('number');
+    }
+
+    // Config 15: validators elected for
+    if (data['15']) {
+        expect(data['15'].validatorsElectedFor).toBeDefined();
+        expect(typeof data['15'].validatorsElectedFor).toBe('number');
+    }
+
+    // Config 18: storage prices
+    if (data['18']) {
+        expect(data['18'].storagePrices).toBeDefined();
+        expect(Array.isArray(data['18'].storagePrices)).toBe(true);
+        expect(data['18'].storagePrices.length).toBeGreaterThan(0);
+    }
+});
+
 });
