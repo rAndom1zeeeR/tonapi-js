@@ -6,5 +6,6 @@ export default defineConfig({
     format: ['cjs', 'esm'],
     dts: true,
     sourcemap: true,
-    clean: true
+    clean: true,
+    external: ['@ton/core', '@random1ze/ton-api-client']
 })

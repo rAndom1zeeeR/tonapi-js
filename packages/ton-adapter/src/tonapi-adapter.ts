@@ -23,7 +23,7 @@ import {
     AccountStatus,
     TonApiHttpError,
     TonApiClient
-} from '@ton-api/client';
+} from '@random1ze/ton-api-client';
 import { Buffer } from 'buffer';
 
 export class ContractAdapter {
