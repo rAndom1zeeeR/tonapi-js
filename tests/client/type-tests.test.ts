@@ -25,13 +25,42 @@ beforeEach(() => {
     initClient({ baseUrl: 'https://tonapi.io' });
 
     // Mock fetch to prevent actual API calls during type tests
-    // These calls are never awaited - they're just for type checking
-    vi.spyOn(global, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({}), {
+    // Return valid mock data to prevent runtime errors while type checking
+    vi.spyOn(global, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+        const urlStr = typeof url === 'string' ? url : url.toString();
+
+        // Mock different responses based on endpoint
+        if (urlStr.includes('/status')) {
+            return new Response(JSON.stringify({
+                rest_online: true,
+                indexing_latency: 8
+            }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        if (urlStr.includes('/accounts/')) {
+            return new Response(JSON.stringify({
+                address: 'EQApwowlR6X54bXoso6orKCzCNm9ily8pAFy5vTwmsQ2Wqin',
+                balance: '1000000000',
+                status: 'active'
+            }), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+
+        // Default response for other endpoints
+        return new Response(JSON.stringify({
+            rest_online: true,
+            indexing_latency: 8,
+            accounts: []
+        }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
-        })
-    );
+        });
+    });
 });
 
 test('Advanced API - Global methods with ThrowOnError', () => {

@@ -38,26 +38,7 @@ test('Client apiKey test', async () => {
     );
 });
 
-test('Client apiKey missing test', async () => {
-    const fetchSpy = mockFetch({
-        rest_online: true,
-        indexing_latency: 8
-    });
-
-    const res = await ta.status();
-    expect(res).toBeDefined();
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-            headers: expect.not.objectContaining({
-                Authorization: expect.anything()
-            })
-        })
-    );
-});
-
-test('Client fallback test', async () => {
+test('Client without apiKey should not include Authorization header', async () => {
     const fetchSpy = mockFetch({
         rest_online: true,
         indexing_latency: 8

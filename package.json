@@ -1,7 +1,7 @@
 {
   "name": "ton-api",
   "private": true,
-  "version": "0.5.0-alpha.6",
+  "version": "0.5.0-alpha.9",
   "type": "module",
   "scripts": {
     "postinstall": "patch-package",
@@ -9,6 +9,7 @@
     "test:client": "vitest run tests/client",
     "test:adapters": "vitest run tests/adapters",
     "test:integration": "INTEGRATION=true vitest run tests/client/integration.test.ts",
+    "test:memory-leak": "MEMORY_LEAK=true NODE_OPTIONS=\"--expose-gc\" vitest run tests/client/memory-leak.test.ts",
     "test:watch": "vitest",
     "build": "turbo run build",
     "build:client": "turbo run build --filter=@ton-api/client",

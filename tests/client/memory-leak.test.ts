@@ -17,7 +17,13 @@ const tonApiClient = new TonApiClient({ baseUrl: 'https://tonapi.io' });
 // To run this test:
 // NODE_OPTIONS="--expose-gc" npm run test tests/client/memory-leak.test.ts
 
-describe.skip('Memory leak test', () => {
+// Memory leak tests - run separately with dedicated command
+// These tests are resource-intensive and should not run in regular test suite
+// Run with: npm run test:memory-leak
+
+const skipMemoryLeak = !process.env.MEMORY_LEAK;
+
+describe.skipIf(skipMemoryLeak)('Memory leak test', () => {
     const iterations = 500000;
 
     test('Memory leak test for instance API', async () => {
