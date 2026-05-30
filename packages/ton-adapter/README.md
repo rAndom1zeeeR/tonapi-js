@@ -1,8 +1,8 @@
-# @ton-api/ton-adapter
+# @random1ze/ton-api-adapter
 
 ## Overview
 
-`@ton-api/ton-adapter` is an adapter that enables integration between
+`@random1ze/ton-api-adapter` is an adapter that enables integration between
 [TonApi client](https://www.npmjs.com/package/@ton-api/client) and the
 [@ton/ton](https://www.npmjs.com/package/@ton/ton) and
 [@ton/core](https://www.npmjs.com/package/@ton/core) libraries. This adapter allows developers to
@@ -21,11 +21,11 @@ tools.
 Install the package and its peer dependency using npm, yarn, or pnpm:
 
 ```sh
-npm install @ton-api/client @ton-api/ton-adapter
+npm install @random1ze/ton-api-client @random1ze/ton-api-adapter
 # or
-yarn add @ton-api/client @ton-api/ton-adapter
+yarn add @random1ze/ton-api-client @random1ze/ton-api-adapter
 # or
-pnpm add @ton-api/client @ton-api/ton-adapter
+pnpm add @random1ze/ton-api-client @random1ze/ton-api-adapter
 ```
 
 ## Quick Start
@@ -36,7 +36,7 @@ Here's a basic example to get you started:
 import { SendMode, WalletContractV5R1, internal } from '@ton/ton';
 import { mnemonicNew, mnemonicToPrivateKey } from '@ton/crypto';
 import { TonApiClient } from '@ton-api/client';
-import { ContractAdapter } from '@ton-api/ton-adapter';
+import { ContractAdapter } from '@random1ze/ton-api-adapter';
 
 // Initialize TonApi client
 const ta = new TonApiClient({

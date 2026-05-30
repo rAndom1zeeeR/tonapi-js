@@ -1,10 +1,11 @@
-# @ton-api/client
+# @random1ze/ton-api-client
 
 ## Overview
 
-`@ton-api/client` is an automatically generated SDK that provides seamless access to the endpoints
-offered by [tonapi.io](https://tonapi.io). This client is specifically designed to integrate with
-the TON blockchain, offering type-safe interactions and full compatibility with @ton/core library.
+`@random1ze/ton-api-client` is an automatically generated SDK that provides seamless access to the
+endpoints offered by [tonapi.io](https://tonapi.io). This client is specifically designed to
+integrate with the TON blockchain, offering type-safe interactions and full compatibility with
+@ton/core library.
 
 ## Documentation
 
@@ -23,9 +24,10 @@ For detailed API information and endpoint descriptions, please refer to:
 -   Structured error handling with `{ data, error }` pattern
 -   Support for multiple client instances
 
-Additionally, [`@ton-api/ton-adapter`](https://www.npmjs.com/package/@ton-api/ton-adapter) enables
-users to work with contracts written for `@ton/ton` through `@ton-api/client`, ensuring seamless
-integration while maintaining their existing code structure.
+Additionally,
+[`@random1ze/ton-api-adapter`](https://www.npmjs.com/package/@random1ze/ton-api-adapter) enables
+users to work with contracts written for `@ton/ton` through `@random1ze/ton-api-client`, ensuring
+seamless integration while maintaining their existing code structure.
 
 ## Prerequisites
 
@@ -40,7 +42,7 @@ To use this SDK, you need to:
 Install the package and its peer dependencies using npm, yarn, or pnpm:
 
 ```sh
-npm install @ton-api/client @ton/core buffer
+npm install @random1ze/ton-api-client @ton/core buffer
 ```
 
 > Note: `@ton/core` is a peer dependency and needs to be installed separately.
@@ -59,7 +61,7 @@ require('buffer');
 Initialize the client and start making requests:
 
 ```typescript
-import { initClient, getAccount } from '@ton-api/client';
+import { initClient, getAccount } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 // Initialize the default client
@@ -87,7 +89,7 @@ console.log('Account balance:', data.balance);
 ### Fetching Account Information
 
 ```typescript
-import { initClient, getAccount } from '@ton-api/client';
+import { initClient, getAccount } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 initClient({ baseUrl: 'https://tonapi.io' });
@@ -110,7 +112,7 @@ console.log('Is active:', data.status === 'active');
 ### Working with Multiple Accounts
 
 ```typescript
-import { getAccounts } from '@ton-api/client';
+import { getAccounts } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 const addresses = [
@@ -134,7 +136,7 @@ console.log('Accounts:', data.accounts);
 ### Using Query Parameters
 
 ```typescript
-import { getAccounts } from '@ton-api/client';
+import { getAccounts } from '@random1ze/ton-api-client';
 
 const addresses = [Address.parse('EQApwowlR6X54bXoso6orKCzCNm9ily8pAFy5vTwmsQ2Wqin')];
 
@@ -155,7 +157,7 @@ console.log('Accounts with USD prices:', data.accounts);
 ### Fetching NFT Collection
 
 ```typescript
-import { getNftCollection } from '@ton-api/client';
+import { getNftCollection } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 const collectionAddress = Address.parse('EQCA14o1-VWhS2efqoh_9M1b_A9DtKTuoqfmkn83AbJzwnPi');
@@ -175,7 +177,7 @@ console.log('Total items:', data.nextItemIndex);
 ### Getting Jetton Information
 
 ```typescript
-import { getJettonInfo } from '@ton-api/client';
+import { getJettonInfo } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 const jettonAddress = Address.parse('EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs');
@@ -198,7 +200,7 @@ console.log('Total supply:', data.totalSupply);
 You can pass addresses as `Address` objects or as strings:
 
 ```typescript
-import { getAccount } from '@ton-api/client';
+import { getAccount } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 // Using Address object
@@ -222,7 +224,7 @@ By default, all methods return `{ data, error }` structure. This is the recommen
 errors:
 
 ```typescript
-import { getAccount } from '@ton-api/client';
+import { getAccount } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 const address = Address.parse('EQApwowlR6X54bXoso6orKCzCNm9ily8pAFy5vTwmsQ2Wqin');
@@ -251,7 +253,7 @@ import {
     TonApiNetworkError,
     TonApiValidationError,
     TonApiParsingError
-} from '@ton-api/client';
+} from '@random1ze/ton-api-client';
 
 const { data, error } = await getAccount({
     path: { accountId: address }
@@ -300,7 +302,7 @@ if (error) {
 If you prefer exceptions instead of `{ data, error }`, use `throwOnError: true`:
 
 ```typescript
-import { getAccount } from '@ton-api/client';
+import { getAccount } from '@random1ze/ton-api-client';
 
 // This will throw an exception on error instead of returning { data, error }
 const data = await getAccount({
@@ -317,7 +319,7 @@ console.log('Balance:', data?.balance);
 ## Sending Transactions
 
 ```typescript
-import { sendBlockchainMessage } from '@ton-api/client';
+import { sendBlockchainMessage } from '@random1ze/ton-api-client';
 import { beginCell, external, storeMessage, Address } from '@ton/core';
 
 const accountAddress = Address.parse('EQApwowlR6X54bXoso6orKCzCNm9ily8pAFy5vTwmsQ2Wqin');
@@ -354,7 +356,7 @@ console.log('Message sent successfully');
 You can use methods with different client instances by passing the `client` option:
 
 ```typescript
-import { initClient, getAccount, TonApiClient } from '@ton-api/client';
+import { initClient, getAccount, TonApiClient } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 // Initialize default client for mainnet
@@ -391,7 +393,7 @@ If you prefer object-oriented approach or need complete isolation between client
 use the Instance API. Instance API uses positional parameters instead of options objects.
 
 ```typescript
-import { TonApiClient } from '@ton-api/client';
+import { TonApiClient } from '@random1ze/ton-api-client';
 import { Address } from '@ton/core';
 
 // Create a client instance
@@ -473,7 +475,7 @@ console.log('Accounts:', accounts.accounts);
 #### Executing Contract Methods
 
 ```typescript
-import { execGetMethodForBlockchainAccount } from '@ton-api/client';
+import { execGetMethodForBlockchainAccount } from '@random1ze/ton-api-client';
 
 const tonapi = new TonApiClient({ baseUrl: 'https://tonapi.io' });
 
@@ -545,11 +547,11 @@ For more advanced use cases, check out the examples in our repository:
 ## Working with Contracts
 
 For advanced contract interactions, use
-[`@ton-api/ton-adapter`](https://www.npmjs.com/package/@ton-api/ton-adapter):
+[`@random1ze/ton-api-adapter`](https://www.npmjs.com/package/@random1ze/ton-api-adapter):
 
 ```typescript
-import { TonApiClient } from '@ton-api/client';
-import { ContractAdapter } from '@ton-api/ton-adapter';
+import { TonApiClient } from '@random1ze/ton-api-client';
+import { ContractAdapter } from '@random1ze/ton-api-adapter';
 import { WalletContractV5R1 } from '@ton/ton';
 
 const tonapi = new TonApiClient({ baseUrl: 'https://tonapi.io' });

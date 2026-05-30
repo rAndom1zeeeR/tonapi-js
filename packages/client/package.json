@@ -26,12 +26,12 @@
         "LICENSE"
     ],
     "bugs": {
-        "url": "https://github.com/tonkeeper/tonapi-js/issues"
+        "url": "https://github.com/random1zeeer/tonapi-js/issues"
     },
-    "homepage": "https://github.com/tonkeeper/tonapi-js/blob/main/packages/client#readme",
+    "homepage": "https://github.com/random1zeeer/tonapi-js/blob/main/packages/client#readme",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/tonkeeper/tonapi-js.git"
+        "url": "git+https://github.com/random1zeeer/tonapi-js.git"
     },
     "scripts": {
         "build": "npm run clean && npx tsx ./src/generate.ts && npx tsc",
